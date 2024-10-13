@@ -1,3 +1,4 @@
+# vim: set textwidth=0:
 from torch.utils.data import Dataset
 import torch
 import json
@@ -1851,36 +1852,36 @@ def set_seed(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default='facebook/bart-base', type=str)
-    parser.add_argument('--seed', type=int, default=42, help="random seed for initialization")
-    parser.add_argument('--do_train', default=False, action="store_true", help="whether to train or test the model")
-    parser.add_argument('--do_val', default=False, action="store_true", help="whether to train or test the model")
-    parser.add_argument('--do_test', default=False, action="store_true", help="whether to compute the BLEU scores on test split")
+    parser.add_argument("--model", default='facebook/bart-base', type=str, help="specify the pretrained model to use")
+    parser.add_argument('--seed', type=int, default=42, help="random seed for initialization and reproducibility")
+    parser.add_argument('--do_train', default=False, action="store_true", help="whether to perform training")
+    parser.add_argument('--do_val', default=False, action="store_true", help="whether to perform validation")
+    parser.add_argument('--do_test', default=False, action="store_true", help="whether to perform testing")
     parser.add_argument('--pretrain', default=False, action="store_true", help="whether to train or test the model")
 
     parser.add_argument('--optimizer', default='Adamw', choices=['Adamw', 'Adafactor'], type=str)
-    parser.add_argument('--epoch', default=1, type=int)
+    parser.add_argument('--epoch', default=1, type=int, help="number of epochs for training")
     parser.add_argument('--batch_size', default=5 , type=int)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
     parser.add_argument('--every', default=50, type=int, help="interval for evaluation")
-    parser.add_argument('--interval_type', default='step', type=str, choices=['step', 'epoch'])
+    parser.add_argument('--interval_type', default='step', type=str, choices=['step', 'epoch'], help="whether to evaluate at intervals based on steps or epochs")
     parser.add_argument('--interval_step', default=1000, type=int, help="interval for evaluation when interval_type = step.")
     parser.add_argument('--load_from', default=None, type=str, help="model checkpoint path")
-    parser.add_argument('--max_src_len', default=500, type=int, help="whether to train or test the model")
-    parser.add_argument('--max_tgt_len', default=200, type=int)
-    parser.add_argument('--gradient_accumulation_steps', type=int, default=5, help="accumulation steps for gradient")
+    parser.add_argument('--max_src_len', default=500, type=int, help="max length of input sequence")
+    parser.add_argument('--max_tgt_len', default=200, type=int, help="target output length")
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=5, help="number of steps to accumulate gradients before updating parameters")
 
     parser.add_argument('--data_path', type=str, default='/content/drive/MyDrive/Dataset/contlog')
     parser.add_argument('--log_path',type=str, default='/content/drive/MyDrive/Output/logs/d2t/outputs')
     parser.add_argument('--ckpt_path', type=str, default='/content/drive/MyDrive/Output/models/d2t')
     parser.add_argument('--affix', type=str, default=None, required=True, help="The experiment name")
-    parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--n_gpu', type=str, default=0)
+    parser.add_argument('--device', type=str, default='cuda', help="specifies the device to use for computations (CPU or CUDA)")
+    parser.add_argument('--n_gpu', type=str, default=0, help="number of GPU to use")
     parser.add_argument('--task', type=str, default='text', help='task: text (table2text) or logic (table2logic)')
-    parser.add_argument('--add_type', default=False, action="store_true")
+    parser.add_argument('--add_type', default=False, action="store_true", help="indicate whether to add type information to the input")
     parser.add_argument('--pre_com', default=False, action="store_true", help="whether to do numerical precomputation")
-    parser.add_argument('--global_step', default=1, type=int)
-    parser.add_argument('--use_cache', default=False, action="store_true")
+    parser.add_argument('--global_step', default=1, type=int, help="initialize global step counter")
+    parser.add_argument('--use_cache', default=False, action="store_true", help="enable caching mechanisms")
 
     args = parser.parse_args()
     args.n_gpu = torch.cuda.device_count()
