@@ -1798,9 +1798,9 @@ def validation_contlog(val_file, model, tokenizer, split, args):
                                 num_e_correct += 1
                         except:
                             continue
-                acc_exact = 1. * num_exact / num_samples * 100
-                acc_p = 1. * num_p_correct / num_samples * 100
                 acc_e = 1. * num_e_correct / num_samples * 100
+                acc_p = 1. * num_p_correct / num_samples * 100
+                acc_exact = 1. * num_exact / num_samples * 100
             print("[INFO] Execution accuracy:  ", acc_e)
             print("[INFO] Pattern accuracy: ", acc_p)
             print("[INFO] Exact-match accuracy:  ", acc_exact)
