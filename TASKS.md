@@ -5,6 +5,9 @@ List of things to do and questions to answer.
 ## Questions
 
 1. How to use the generated model?
+
+    - Load the model using `transformers` package
+
 2. What would the input look like when we deal with tabular data?
 3. How will the content selection be done so that we can get the idea we want to
    collect?
@@ -28,9 +31,9 @@ List of things to do and questions to answer.
 ## Tasks
 
 - [ ] Divide the text pretrain to half for CONTLOG training
-- [ ] Finetune the task text on the model for CONTLOG
-- [ ] Try running the model generated from pretraining
-- [ ] Identify what would be your input or how to modify tabular data along text
+- [x] Finetune the task text on the model for CONTLOG
+- [x] Try running the model generated from pretraining
+- [x] Identify what would be your input or how to modify tabular data along text
 - [ ] Create diagrams that would describe what you are aiming for
 - [ ] Create the content selection idea you have
 - [ ] Update paper
@@ -73,3 +76,11 @@ List of things to do and questions to answer.
 ## Parts to update on paper
 
 - [ ] Whole methodology
+
+## What did we do. Currently
+
+- [x] Pretrained the `facebook/bart-large` model on table to logic dataset by
+   contlog
+- [x] Finetuned the model that was pretrained on `facebook/bart-large` model for
+   table to text tasks
+- [ ] Finetuned it again for summarization task using SciGen dataset
