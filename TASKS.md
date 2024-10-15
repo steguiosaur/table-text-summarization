@@ -6,7 +6,8 @@ List of things to do and questions to answer.
 
 1. How to use the generated model?
 
-    - Load the model using `transformers` package
+   - Load the model using `transformers` and `torch` package.
+     See file `generation.py` for sample loading and inference.
 
 2. What would the input look like when we deal with tabular data?
 3. How will the content selection be done so that we can get the idea we want to
@@ -19,6 +20,10 @@ List of things to do and questions to answer.
 7. Identify how would you evaluate the results of this model.
 8. Identify how highlighting works.
 9. What is BART? Why use it?
+
+   - BART stands for Bidirectional and Auto-Regressive Transformers which is a
+     sequence-to-sequence model. See link for further understanding [BART MODEL](https://www.projectpro.io/article/transformers-bart-model-explained/553)
+
 10. Learn how this logical form representation is related to compiler design.
 11. What is intermediate meaning representations?
 12. Explain why you need logical forms in this.
@@ -30,7 +35,6 @@ List of things to do and questions to answer.
 
 ## Tasks
 
-- [ ] Divide the text pretrain to half for CONTLOG training
 - [x] Finetune the task text on the model for CONTLOG
 - [x] Try running the model generated from pretraining
 - [x] Identify what would be your input or how to modify tabular data along text
@@ -80,7 +84,12 @@ List of things to do and questions to answer.
 ## What did we do. Currently
 
 - [x] Pretrained the `facebook/bart-large` model on table to logic dataset by
-   contlog
+      contlog
 - [x] Finetuned the model that was pretrained on `facebook/bart-large` model for
-   table to text tasks
+      table to text tasks
 - [ ] Finetuned it again for summarization task using SciGen dataset
+
+## Some solutions
+
+1. Check this link for fixing the issue on `pyrouge`
+   - [pyrouge fix](https://stackoverflow.com/questions/45894212/installing-pyrouge-gets-error-in-ubuntu)

@@ -42,7 +42,8 @@ if __name__ == '__main__':
 
     # Load the model and tokenizer
     model_name = 'facebook/bart-large'  # Change to your specific model name
-    model_path = "/content/drive/MyDrive/Output/models/d2t/text_train/bart-large_ep1.pt"
+    # model_path = "/content/drive/MyDrive/Output/models/d2t/text_train/bart-large_ep1.pt"
+    model_path = "~/Downloads/bart-large_ep1(1).pt"
 
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(model_name, model_path)

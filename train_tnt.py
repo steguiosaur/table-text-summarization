@@ -1873,7 +1873,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_path',type=str, default='/content/drive/MyDrive/Output/logs/d2t/outputs')
     parser.add_argument('--ckpt_path', type=str, default='/content/drive/MyDrive/Output/models/d2t')
     parser.add_argument('--affix', type=str, default=None, required=True, help="The experiment name")
-    parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'], help="specifies the device to use for computations (CPU or CUDA)")
+    parser.add_argument('--device', type=str, default='cuda', help="specifies the device to use for computations (CUDA only)")
     parser.add_argument('--n_gpu', type=str, default=0, help="number of GPU to use")
     parser.add_argument('--task', type=str, default='text', help='task: text (table2text) or logic (table2logic)')
     parser.add_argument('--add_type', default=False, action="store_true", help="indicate whether to add type information to the input")
@@ -1882,8 +1882,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_cache', default=False, action="store_true", help="enable caching mechanisms")
 
     args = parser.parse_args()
-    if args.device == "cuda":
-        args.n_gpu = torch.cuda.device_count()
+    args.n_gpu = torch.cuda.device_count()
 
 
     set_seed(args)
@@ -1902,10 +1901,7 @@ if __name__ == '__main__':
 
     tokenizer.add_tokens(markers)
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model)
-    if args.device == "cuda":
-        model.to(args.device)
-    else:
-        model.cpu()
+    model.to(args.device)
     model.resize_token_embeddings(len(tokenizer))
     if args.load_from is not None:
         model.load_state_dict(torch.load(args.load_from))
@@ -1925,6 +1921,18 @@ if __name__ == '__main__':
     if not os.path.exists(os.path.join(args.ckpt_path, args.affix)):
         os.makedirs(os.path.join(args.ckpt_path, args.affix))
 
+    # Determin pretraining data.
+    if args.task == 'logic':
+        train_file = os.path.join(args.data_path, 'all_pretrain_train_s.json')
+        val_file = os.path.join(args.data_path, 'all_pretrain_valid.json')
+        test_file = os.path.join(args.data_path, 'all_pretrain_test.json')
+    elif args.task == 'text':
+        train_file = os.path.join(args.data_path, 'train.json')
+        val_file = os.path.join(args.data_path, 'val.json')
+        test_file = os.path.join(args.data_path, 'test.json')
+    else:
+        raise NotImplementedError
+
     if args.do_train:
         # freeze embedding layers
         if args.model.startswith('t5'):
@@ -1934,18 +1942,6 @@ if __name__ == '__main__':
             for d in [model.model.encoder, model.model.decoder]:
                 # freeze_params(d.embed_positions)
                 freeze_params(d.embed_tokens)
-
-        # Determin pretraining data.
-        if args.task == 'logic':
-            train_file = os.path.join(args.data_path, 'all_pretrain_train_s.json')
-            val_file = os.path.join(args.data_path, 'all_pretrain_valid.json')
-            test_file = os.path.join(args.data_path, 'all_pretrain_test.json')
-        elif args.task == 'text':
-            train_file = os.path.join(args.data_path, 'train.json')
-            val_file = os.path.join(args.data_path, 'val.json')
-            test_file = os.path.join(args.data_path, 'test.json')
-        else:
-            raise NotImplementedError
 
         train_dataset = ContlogDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task, args.add_type, args.pre_com)
         train_loader = DataLoader(train_dataset,
@@ -1980,7 +1976,6 @@ if __name__ == '__main__':
                 loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
 
                 loss = loss / args.gradient_accumulation_steps
-
                 total_loss.append(loss.item())
                 loss.backward()
 
