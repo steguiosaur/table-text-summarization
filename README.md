@@ -73,8 +73,22 @@ Install dependencies using `pip install -r requirements.txt`
 torch==2.4.1
 transformers==4.45.2
 pandas==2.2.3
-pyrouge==0.1.3
 nltk==3.9.1
+```
+
+For evaluation, do not install `pyrouge` using pip. Follow this
+[guide](https://stackoverflow.com/a/57686103/20493501) or use the
+following command if you are on google colab.
+
+```sh
+!git clone https://github.com/bheinzerling/pyrouge /content/pyrouge/
+!pip install -e /content/pyrouge/
+!git clone https://github.com/andersjo/pyrouge.git /content/pyrouge/rouge
+!pyrouge_set_rouge_path /content/pyrouge/rouge/tools/ROUGE-1.5.5/
+!apt-get install -y libxml-parser-perl
+!rm /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0.exc.db
+!/content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0-Exceptions/buildExeptionDB.pl /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0-Exceptions /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/smart_common_words.txt /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0.exc.db
+!python -m pyrouge.test
 ```
 
 ## Training
