@@ -1889,8 +1889,7 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     markers = ["{", "}", "<table>", "</table>", "<type>", "</type>", "<cell>", "</cell>", "<col_header>", "</col_header>", "<row_idx>", "</row_idx>"]
     if args.pre_com:
-        markers += ["<max_rank>", "</max_rank>", "<min_rank>", "</min_rank>", "<sum_cell>", "</sum_cell>", "<avg_cell>",
-                "</avg_cell>"]
+        markers += ["<max_rank>", "</max_rank>", "<min_rank>", "</min_rank>", "<sum_cell>", "</sum_cell>", "<avg_cell>", "</avg_cell>"]
 
     # with open('special_vocab.json') as f:
     #     special_vocabs = json.load(f)
@@ -1913,7 +1912,6 @@ if __name__ == '__main__':
             par.requires_grad = False
 
 
-
     criterion = nn.CrossEntropyLoss(reduction='none', ignore_index=-1)
 
     if not os.path.exists(os.path.join(args.log_path, args.affix)):
@@ -1927,6 +1925,10 @@ if __name__ == '__main__':
         val_file = os.path.join(args.data_path, 'all_pretrain_valid.json')
         test_file = os.path.join(args.data_path, 'all_pretrain_test.json')
     elif args.task == 'text':
+        train_file = os.path.join(args.data_path, 'train.json')
+        val_file = os.path.join(args.data_path, 'val.json')
+        test_file = os.path.join(args.data_path, 'test.json')
+    elif args.task == 'summ':
         train_file = os.path.join(args.data_path, 'train.json')
         val_file = os.path.join(args.data_path, 'val.json')
         test_file = os.path.join(args.data_path, 'test.json')

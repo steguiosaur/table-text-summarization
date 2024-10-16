@@ -81,9 +81,9 @@ nltk==3.9.1
 
 Access executor and dataset from:
 
-- [Colab](https://colab.research.google.com/drive/1ASHLLj3GLilqS81cXr8YURCUoheb0qCO?usp=sharing)
+- [Colab](https://colab.research.google.com/drive/1bjb6SYsMTra1cTrkqKZzPwJQvtHwj3hr#updateTitle=true&folderId=1Sz9AyhaTenssgJXjd-IqGUZakbPORKRf&scrollTo=nLcm-ujRGzvW)
 - [Dataset](https://drive.google.com/drive/folders/1sCCc7XVBMeFEnkuBeBvQ0LakaxWqbSFl?usp=drive_link)
-- [Models](url)
+- [Models](https://drive.google.com/drive/folders/1DNmnKNlgRKV0wcc-C7JbNCqnvPR6tDYV?usp=drive_link)
 
 ## Attributions
 
