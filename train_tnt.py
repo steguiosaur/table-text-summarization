@@ -7,7 +7,7 @@ from collections import defaultdict
 import pandas as pd
 from tqdm import tqdm
 
-def preprocess_contlog(data_file: str, add_type: bool, pre_com: bool):
+def preprocess_computation(data_file: str, add_type: bool, pre_com: bool):
     '''
     Args:
         data_file: path to the data file
@@ -56,7 +56,7 @@ def preprocess_contlog(data_file: str, add_type: bool, pre_com: bool):
 class ContlogDataset(Dataset):
 
     def __init__(self, data_file, tokenizer, max_src_len, max_tgt_len, task, add_type=False, pre_com=True):
-        self.data = preprocess_contlog(data_file, add_type, pre_com)
+        self.data = preprocess_computation(data_file, add_type, pre_com)
         self.max_src_len = max_src_len
         self.max_tgt_len = max_tgt_len
         self.tokenizer = tokenizer
@@ -1596,16 +1596,6 @@ def execute(data):
     return res
 
 
-def execute_logicnlg(pd_table, logic):
-    root = Node(pd_table, logic)
-    res = root.eval_index()
-    res = res[0]
-    if 'ExeError' in str(res) or not res:
-        # print("res incorrect, try mutations")
-        res = root.str_rep()
-        # print(res)
-    return res
-
 
 def tostr(data):
     logic = data["logic"]
@@ -1647,20 +1637,20 @@ from pyrouge import Rouge155
 import pandas as pd
 
 
-# def bleu_score(labels_file, predictions_path):
-#     bleu_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'multi-bleu.perl')
-#     try:
-#         with io.open(predictions_path, encoding="utf-8", mode="r") as predictions_file:
-#             bleu_out = subprocess.check_output(
-#                 [bleu_script, labels_file],
-#                 stdin=predictions_file,
-#                 stderr=subprocess.STDOUT)
-#             bleu_out = bleu_out.decode("utf-8")
-#             bleu_score = re.search(r"BLEU = (.+?),", bleu_out).group(1)
-#             return float(bleu_score)
-#
-#     except subprocess.CalledProcessError as error:
-#         return None
+def bleu_score(labels_file, predictions_path):
+    bleu_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'multi-bleu.perl')
+    try:
+        with io.open(predictions_path, encoding="utf-8", mode="r") as predictions_file:
+            bleu_out = subprocess.check_output(
+                [bleu_script, labels_file],
+                stdin=predictions_file,
+                stderr=subprocess.STDOUT)
+            bleu_out = bleu_out.decode("utf-8")
+            bleu_score = re.search(r"BLEU = (.+?),", bleu_out).group(1)
+            return float(bleu_score)
+
+    except subprocess.CalledProcessError as error:
+        return None
 
 
 def pattern_match(logic, truth):
@@ -1686,7 +1676,7 @@ def pattern_match(logic, truth):
     return True
 
 
-def validation_contlog(val_file, model, tokenizer, split, args):
+def validation_task(val_file, model, tokenizer, split, args):
     val_dataset = ContlogDataset(val_file, tokenizer, args.max_src_len, args.max_tgt_len,
                                      args.task, args.add_type, args.pre_com)
     val_loader = DataLoader(val_dataset,
@@ -1742,7 +1732,7 @@ def validation_contlog(val_file, model, tokenizer, split, args):
             pred = os.path.join(args.log_path, args.affix, f'predictions_{split}.txt')
             # bleu4 = bleu_score(gt, pred)
             # print("[INFO] {} BLEU score = {}".format(split, bleu4))
-            # # log_file.write("[INFO] {} BLEU score = {}\n".format(split, bleu4))
+            # log_file.write("[INFO] {} BLEU score = {}\n".format(split, bleu4))
 
             # ROUGE scripts
             r = Rouge155()
@@ -1835,7 +1825,6 @@ from torch import nn
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, Adafactor, AdamW
 
-
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -1875,7 +1864,7 @@ if __name__ == '__main__':
     parser.add_argument('--affix', type=str, default=None, required=True, help="The experiment name")
     parser.add_argument('--device', type=str, default='cuda', help="specifies the device to use for computations (CUDA only)")
     parser.add_argument('--n_gpu', type=str, default=0, help="number of GPU to use")
-    parser.add_argument('--task', type=str, default='text', help='task: text (table2text) or logic (table2logic)')
+    parser.add_argument('--task', type=str, default='text', help='task: text (table2text) or logic (table2logic) or summ (tabletextsumm)')
     parser.add_argument('--add_type', default=False, action="store_true", help="indicate whether to add type information to the input")
     parser.add_argument('--pre_com', default=False, action="store_true", help="whether to do numerical precomputation")
     parser.add_argument('--global_step', default=1, type=int, help="initialize global step counter")
@@ -1883,43 +1872,40 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     args.n_gpu = torch.cuda.device_count()
+    set_seed(args) # for reproducibility
 
-
-    set_seed(args)
+    # add special tokens to tokenizer for linearized table structure
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     markers = ["{", "}", "<table>", "</table>", "<type>", "</type>", "<cell>", "</cell>", "<col_header>", "</col_header>", "<row_idx>", "</row_idx>"]
     if args.pre_com:
         markers += ["<max_rank>", "</max_rank>", "<min_rank>", "</min_rank>", "<sum_cell>", "</sum_cell>", "<avg_cell>", "</avg_cell>"]
-
-    # with open('special_vocab.json') as f:
-    #     special_vocabs = json.load(f)
-    # vocab = tokenizer.get_vocab()
-    # for token in special_vocabs:
-    #     if token not in vocab.keys():
-    #         markers.append(token)
-
+    if args.task == "summ":
+        markers += ["<text>", "</text>"]
     tokenizer.add_tokens(markers)
+
+    # model setup, load pretrained weights, and accomodate special tokens
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model)
     model.to(args.device)
     model.resize_token_embeddings(len(tokenizer))
     if args.load_from is not None:
         model.load_state_dict(torch.load(args.load_from))
 
-
+    # layer freezing for retaining features
     def freeze_params(model: nn.Module):
         """Set requires_grad=False for each of model.parameters()"""
         for par in model.parameters():
             par.requires_grad = False
 
-
+    # loss function
     criterion = nn.CrossEntropyLoss(reduction='none', ignore_index=-1)
 
+    # create directories to store logs and models
     if not os.path.exists(os.path.join(args.log_path, args.affix)):
         os.makedirs(os.path.join(args.log_path, args.affix))
     if not os.path.exists(os.path.join(args.ckpt_path, args.affix)):
         os.makedirs(os.path.join(args.ckpt_path, args.affix))
 
-    # Determin pretraining data.
+    # set pretraining data location
     if args.task == 'logic':
         train_file = os.path.join(args.data_path, 'all_pretrain_train_s.json')
         val_file = os.path.join(args.data_path, 'all_pretrain_valid.json')
@@ -1946,10 +1932,7 @@ if __name__ == '__main__':
                 freeze_params(d.embed_tokens)
 
         train_dataset = ContlogDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task, args.add_type, args.pre_com)
-        train_loader = DataLoader(train_dataset,
-                              num_workers=5,
-                              batch_size=args.batch_size,
-                              shuffle=True)
+        train_loader = DataLoader(train_dataset, num_workers=5, batch_size=args.batch_size, shuffle=True)
         model.train()
 
         if args.optimizer == 'Adamw':
@@ -1963,48 +1946,53 @@ if __name__ == '__main__':
         total_loss = []
         # best validation score
         best_val = 0
-        best_metric = "bleu4" if args.task == 'text' else "exec_acc"
+        # best_metric = "bleu4" if args.task == 'text' else "exec_acc"
 
         for epoch_idx in range(1, args.epoch+1):
-
             print("[INFO] start training {}th epoch".format(epoch_idx))
             for idx, batch in enumerate(tqdm(train_loader)):
+                # data preparation
                 lm_labels = batch['target_ids'].to(args.device, dtype=torch.long)
                 lm_labels[lm_labels == tokenizer.pad_token_id] = -100
                 ids = batch['source_ids'].to(args.device, dtype=torch.long)
                 mask = batch['source_mask'].to(args.device, dtype=torch.long)
 
+                # forward pass and loss calculation
                 outputs = model(input_ids=ids, attention_mask=mask, labels=lm_labels)
                 loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
 
+                # gradient accumulation, loss scaling, and backpropagation
                 loss = loss / args.gradient_accumulation_steps
                 total_loss.append(loss.item())
                 loss.backward()
 
+                # optimizer update model parameter using gradients every gradient accumulation step 
                 if (idx + 1) % args.gradient_accumulation_steps == 0 or (idx + 1) == len(train_loader):
                     optimizer.step()
                     model.zero_grad()
                     optimizer.zero_grad()
-
+                
+                # Perplexity - measure of how well the model is able to predict a sequence every args.every
                 if idx % args.every == 0 and idx > 0:
                     perplexity = math.exp(np.mean(total_loss))
                     total_loss = []
 
-
-
-                if (args.interval_type == 'step' and global_step % args.interval_step == 0 and global_step > 0)\
-                        or (args.interval_type == 'epoch' and (idx + 1) == len(train_loader)):
+                # save model every args.interval_type step or epoch
+                if (args.interval_type == 'step' and global_step % args.interval_step == 0 and global_step > 0) \
+                    or (args.interval_type == 'epoch' and (idx + 1) == len(train_loader)):
                     if args.interval_type == 'step':
                         torch.save(model.state_dict(), '{}/{}/{}_step{}.pt'.format(args.ckpt_path, args.affix, args.model.split('/')[-1], global_step))
                     else:
                         torch.save(model.state_dict(), '{}/{}/{}_ep{}.pt'.format(args.ckpt_path, args.affix, args.model.split('/')[-1], epoch_idx))
 
-                    val_scores = validation_contlog(val_file, model, tokenizer, 'valid', args)
-                    if val_scores[best_metric] > best_val:
-                        best_val = val_scores[best_metric]
-                        test_scores = validation_contlog(test_file, model, tokenizer, 'test', args)
+                    # validation step
+                    val_scores = validation_task(val_file, model, tokenizer, 'valid', args)
+                    if args.task == "logic" and val_scores["exec_acc"] > best_val:
+                        best_val = val_scores["exec_acc"]
+                    test_scores = validation_task(test_file, model, tokenizer, 'test', args)
                 global_step += 1
 
+    # just test model, no training
     if args.do_test:
-        test_scores = validation_contlog(test_file, model, tokenizer, 'test', args)
+        test_scores = validation_task(test_file, model, tokenizer, 'test', args)
         print(test_scores)
