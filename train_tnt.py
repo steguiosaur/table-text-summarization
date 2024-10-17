@@ -1677,8 +1677,10 @@ def pattern_match(logic, truth):
 
 
 def validation_task(val_file, model, tokenizer, split, args):
-    val_dataset = ContlogDataset(val_file, tokenizer, args.max_src_len, args.max_tgt_len,
-                                     args.task, args.add_type, args.pre_com)
+    if args.task == 'summ':
+        val_dataset = ScigenDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.add_type, args.pre_com)
+    else: 
+        val_dataset = ContlogDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task, args.add_type, args.pre_com)
     val_loader = DataLoader(val_dataset,
                             num_workers=5,
                             batch_size=args.batch_size,
@@ -1727,7 +1729,7 @@ def validation_task(val_file, model, tokenizer, split, args):
         gt.close()
         pred.close()
 
-        if args.task == 'text':
+        if args.task == 'text' or args.task == 'summ':
             gt = os.path.join(args.log_path, args.affix, f'references_{split}.txt')
             pred = os.path.join(args.log_path, args.affix, f'predictions_{split}.txt')
             # bleu4 = bleu_score(gt, pred)
@@ -1796,7 +1798,7 @@ def validation_task(val_file, model, tokenizer, split, args):
 
 
         val_metric_dict = {}
-        if args.task == 'text':
+        if args.task == 'text' or args.task == 'summ':
             for type, score in zip(['1', '2', '4', 'L'], rouge_score_list):
                 val_metric_dict[f'rouge{type}'] = score
             # val_metric_dict['bleu4'] = bleu4
@@ -1810,8 +1812,224 @@ def validation_task(val_file, model, tokenizer, split, args):
         model.train()
         return val_metric_dict
 
+##############################################################################
+import nltk
+from nltk.tokenize import sent_tokenize
+
+nltk.download('punkt')
+
+def segment_text(text):
+    sentences = sent_tokenize(text)
+    return [sentence.strip() for sentence in sentences]
+
+# rule based logical type classifier
+def classify_logical_type(text):
+    logic_patterns = {
+        'majority': r'\b(majority|most|predominantly|greater part)\b',
+        'superlative': r'\b(among|max|highest|largest|biggest|greatest|latest|minimum|min|lowest|smallest|least|fewest|greater)\b',
+        'comparative': r'\b(comparison|compared|than|better|worst)\b',
+        'aggregation': r'\b(sum|total|aggregate|combined|summed|overall)\b',
+        'ordinal': r'\b(ordinal|rank|ranking|order|position|first|second|third)\b',
+        'count': r'\b(count|number|total|frequency|amount)\b',
+        'unique': r'\b(unique|distinct|different|only|single)\b',
+    }
+
+    for logic_type, pattern in logic_patterns.items():
+        if re.search(pattern, text, re.IGNORECASE):
+            return logic_type
+
+    return 'unique' 
+
+import re
+
+# Highlight matching table cells based on word-level token comparison
+def highlight_tabular_data(segmented_data, table_contents_value):
+    highlight_cells = []
+
+    for row_index, row in enumerate(table_contents_value):
+        for col_index, cell_value in enumerate(row):
+            cell_value_cleaned = str(cell_value).strip()  # Clean the cell value for comparison
+            
+            # Tokenize the cell value for comparison
+            cell_value_tokens = set(cell_value_cleaned.split())  # Use a set for quick lookup
+
+            for segment in segmented_data:
+                segment_text = segment['text']
+                # Tokenize the segment text
+                segment_tokens = set(re.findall(r'\b\w+\b', segment_text))  # Extract words as tokens
+
+                # Check for intersection between cell tokens and segment tokens
+                if cell_value_tokens.intersection(segment_tokens):
+                    # If there's a match, highlight all cells in the current row
+                    for col in range(len(row)):
+                        highlight_cells.append({
+                            'row': row_index,
+                            'column': col,
+                            'text': str(row[col]).strip(),  # Highlight all cells in this row
+                            # Optional: include additional information if needed
+                            # 'max_rank': 3,
+                            # 'min_rank': -5
+                        })
+                    break  # No need to check other segments for this row, move to the next row
+
+    return highlight_cells
+
+import json
+from collections import defaultdict
+import pandas as pd
+from tqdm import tqdm
+
+def linearize_table_data(data: dict, add_type: bool = False, pre_com: bool = False) -> dict:
+    '''
+    Args:
+        data: input JSON structure containing the table and highlighted data.
+        add_type: whether to add logic type information.
+        pre_com: whether to add pre-computed information (max_rank, min_rank).
+    
+    Returns:
+        The same data dictionary with the linearized table and text added to 'src_text'.
+    '''
+    # Extract the table structure
+    table_caption = data["table_caption"]
+    table_header = data["table_column_names"]
+    table_contents = data["table_content_values"]
+    highlight_cells = data['highlight_cells']
+    
+    # Initialize source text with the caption
+    src_text = f"<table> <caption> {table_caption} </caption> "
+    
+    # If logical type information is needed
+    if add_type:
+        for seg in data['segmented_text']:
+            src_text += f"<type> {seg['action']} </type> {seg['text']} "
+
+    # Convert table data to pandas for easier indexing
+    pd_in = defaultdict(list)
+    for ind, header in enumerate(table_header):
+        for row in table_contents:
+            pd_in[header].append(row[ind])
+    #pd_table = pd.DataFrame(pd_in)
+
+    # Process highlighted cells
+    for cell in highlight_cells:
+        row = cell['row']
+        col_idx = cell['column']
+        cell_value = cell['text']
+        #max_rank = cell.get('max_rank', None)
+        #min_rank = cell.get('min_rank', None)
+        
+        col_header = table_header[col_idx]  # Column header from table structure
+        
+        # Construct cell string
+        #if pre_com and max_rank is not None:
+        #    cell_str = f"<cell> {cell_value} <col_header> {col_header} </col_header> <row_idx> {row} </row_idx> <max_rank> {max_rank} </max_rank> <min_rank> {min_rank} </min_rank></cell> "
+        #else:
+        cell_str = f"<cell> {cell_value} <col_header> {col_header} </col_header> <row_idx> {row} </row_idx> </cell> "
+        
+        # Append cell data to source text
+        src_text += cell_str
+    
+    # Close the table tag
+    src_text += "</table>"
+    
+    # Add the linearized output to the 'src_text' field in the data dictionary
+    data['src_text'] = src_text
+    
+    return data
 
 
+def preprocess_summarization(data_file: str, add_type: bool, pre_com: bool):
+    with open(data_file, 'r') as f:
+        data = json.load(f)
+
+        preprocessed_data = []
+
+        # Process each item in the dataset
+        for key, item in tqdm(data.items()):
+            # Extract relevant fields
+            text = item['text']
+            table_caption = item['table_caption']
+            table_column_names = item['table_column_names']
+            table_content_values = item['table_content_values']
+            
+            # Segment the text
+            segmented_data = segment_text(text)
+            
+            # Classify logical types for segmented sentences
+            segmented_data_with_actions = [
+                {
+                    'text': sentence,
+                    'action': classify_logical_type(sentence)
+                } for sentence in segmented_data
+            ]
+            
+            # Highlight table data based on segmented sentences
+            highlight_cells = highlight_tabular_data(segmented_data_with_actions, table_content_values)
+
+            # Prepare the data structure
+            processed_item = {
+                'text': text,
+                'table_caption': table_caption,
+                'table_column_names': table_column_names,
+                'table_content_values': table_content_values,
+                'segmented_text': segmented_data_with_actions,
+                'highlight_cells': highlight_cells
+            }
+
+            # Linearize the table and add src_text
+            processed_item = linearize_table_data(processed_item, add_type, pre_com)
+
+            # Add the processed item to the preprocessed data list
+            preprocessed_data.append(processed_item)
+
+        return preprocessed_data
+
+class ScigenDataset(Dataset):
+    def __init__(self, file, tokenizer, max_src_len, max_tgt_len, add_type, pre_com):
+        self.data = preprocess_summarization(file, add_type, pre_com)
+        self.max_src_len = max_src_len
+        self.max_tgt_len = max_tgt_len
+        self.tokenizer = tokenizer
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        d = self.data[index]
+
+        # Get the source text from the linearized data
+        src_text = d['src_text'].strip()
+        src_text = ' '.join(src_text.split())
+
+        tgt_text = d['text'].strip()
+        tgt_text = ' '.join(tgt_text.split())
+
+        # Tokenize source and target texts
+        source = self.tokenizer(
+            src_text,
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_src_len
+        )
+        target = self.tokenizer(
+            tgt_text,
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_tgt_len
+        )
+
+        # Convert tokenized data to tensors
+        source_input_ids = torch.LongTensor(source.data["input_ids"])
+        target_input_ids = torch.LongTensor(target.data["input_ids"])
+        source_mask = torch.LongTensor(source.data["attention_mask"])
+
+        return {
+            'source_ids': source_input_ids,
+            'source_mask': source_mask,
+            'target_ids': target_input_ids
+        }
+
+##############################################################################
 
 import math
 import random
@@ -1879,8 +2097,6 @@ if __name__ == '__main__':
     markers = ["{", "}", "<table>", "</table>", "<type>", "</type>", "<cell>", "</cell>", "<col_header>", "</col_header>", "<row_idx>", "</row_idx>"]
     if args.pre_com:
         markers += ["<max_rank>", "</max_rank>", "<min_rank>", "</min_rank>", "<sum_cell>", "</sum_cell>", "<avg_cell>", "</avg_cell>"]
-    if args.task == "summ":
-        markers += ["<text>", "</text>"]
     tokenizer.add_tokens(markers)
 
     # model setup, load pretrained weights, and accomodate special tokens
@@ -1915,9 +2131,9 @@ if __name__ == '__main__':
         val_file = os.path.join(args.data_path, 'val.json')
         test_file = os.path.join(args.data_path, 'test.json')
     elif args.task == 'summ':
-        train_file = os.path.join(args.data_path, 'train.json')
-        val_file = os.path.join(args.data_path, 'val.json')
-        test_file = os.path.join(args.data_path, 'test.json')
+        train_file = os.path.join(args.data_path, 'train/few-shot/train.json')
+        val_file = os.path.join(args.data_path, 'development/few-shot/dev.json')
+        test_file = os.path.join(args.data_path, 'test/test-CL.json')
     else:
         raise NotImplementedError
 
@@ -1931,7 +2147,10 @@ if __name__ == '__main__':
                 # freeze_params(d.embed_positions)
                 freeze_params(d.embed_tokens)
 
-        train_dataset = ContlogDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task, args.add_type, args.pre_com)
+        if args.task == 'summ':
+            train_dataset = ScigenDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.add_type, args.pre_com)
+        else: 
+            train_dataset = ContlogDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task, args.add_type, args.pre_com)
         train_loader = DataLoader(train_dataset, num_workers=5, batch_size=args.batch_size, shuffle=True)
         model.train()
 
@@ -1956,6 +2175,10 @@ if __name__ == '__main__':
                 lm_labels[lm_labels == tokenizer.pad_token_id] = -100
                 ids = batch['source_ids'].to(args.device, dtype=torch.long)
                 mask = batch['source_mask'].to(args.device, dtype=torch.long)
+
+                # print("Input IDs shape:", ids.shape)
+                # print("Attention Mask shape:", mask.shape)
+                # print("Labels shape:", lm_labels.shape)
 
                 # forward pass and loss calculation
                 outputs = model(input_ids=ids, attention_mask=mask, labels=lm_labels)
