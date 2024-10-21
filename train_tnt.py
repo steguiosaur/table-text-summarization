@@ -2131,7 +2131,7 @@ if __name__ == '__main__':
         val_file = os.path.join(args.data_path, 'val.json')
         test_file = os.path.join(args.data_path, 'test.json')
     elif args.task == 'summ':
-        train_file = os.path.join(args.data_path, 'train/few-shot/train.json')
+        train_file = os.path.join(args.data_path, 'train/few-shot/train (1).json')
         val_file = os.path.join(args.data_path, 'development/few-shot/dev.json')
         test_file = os.path.join(args.data_path, 'test/test-CL.json')
     else:

@@ -99,6 +99,12 @@ Access executor and dataset from:
 - [Dataset](https://drive.google.com/drive/folders/1sCCc7XVBMeFEnkuBeBvQ0LakaxWqbSFl?usp=drive_link)
 - [Models](https://drive.google.com/drive/folders/1DNmnKNlgRKV0wcc-C7JbNCqnvPR6tDYV?usp=drive_link)
 
+## Run the UI
+
+1. Install `customtkinter` and `Pillow` in `pip`
+
+2. Execute `./src/main.py`
+
 ## Attributions
 
 > Code mostly came from [microsoft/PLOG](https://github.com/microsoft/PLOG) and [czyssrs/Logic2Text](https://github.com/czyssrs/Logic2Text)

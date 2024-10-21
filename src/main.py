@@ -1,0 +1,153 @@
+from tkinter import Tk, PhotoImage
+from PIL import Image
+from customtkinter import (
+    CTkImage,
+    CTkLabel,
+    CTkButton,
+    CTkFrame,
+    CTkOptionMenu,
+    CTkTextbox,
+    set_appearance_mode,
+    set_default_color_theme,
+    set_widget_scaling,
+)
+from utils.pathing import Pathing
+# from preprocess.tokenizer import Tokenizer
+
+# from models.modelloader import ModelLoader
+
+
+class Main(Tk):
+    def __init__(self):
+        super().__init__()
+
+        self.configure(bg="#222222")
+
+        self.grid_rowconfigure((7, 8), weight=1)
+        self.grid_columnconfigure((0, 2), weight=1)
+
+        # create a frame to contain the label and textbox together
+        self.frame_input = CTkFrame(self, fg_color="#222222")
+        self.frame_input.grid(row=0, column=0, rowspan=8, columnspan=3, sticky="nsew")
+        self.label_input = CTkLabel(self.frame_input, text="INPUT TEXT AND TABLE", fg_color="#222222")
+        self.label_input.pack(side="top", anchor="nw", padx=20, pady=(10, 0))
+        self.textbox_input = CTkTextbox(self.frame_input, fg_color="#2e2e2e")
+        self.textbox_input.pack(fill="both", expand=True, padx=20, pady=(0, 0))
+
+        # show output and error messages
+        self.frame_output = CTkFrame(self, fg_color="#222222")
+        self.frame_output.grid(row=8, column=0, columnspan=3, sticky="nsew")
+        self.label_output = CTkLabel(self.frame_output, text="GENERATED SUMMARY", fg_color="#222222")
+        self.label_output.pack(side="top", anchor="nw", padx=20, pady=(10, 0))
+        self.textbox_output = CTkTextbox(self.frame_output, height=100, fg_color="#2e2e2e")
+        self.textbox_output.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+
+        # logo image
+        self.image_logo = CTkImage(
+            light_image=Image.open(Pathing.asset_path("tbldsc_black.png")),
+            dark_image=Image.open(Pathing.asset_path("tbldsc_white.png")),
+            size=(138, 38),
+        )
+        self.label_logo = CTkLabel(self, text="", image=self.image_logo)
+        self.label_logo.grid(row=0, column=4, padx=(0, 20), pady=20, sticky="n")
+
+        # model selector
+        self.label_model = CTkLabel(self, text="Select Model", fg_color="#222222")
+        self.label_model.grid(row=1, column=4, padx=(0, 20), pady=(20, 0), sticky="")
+        self.option_model = CTkOptionMenu(self, values=["k2t-base", "model2"])
+        self.option_model.grid(row=2, column=4, padx=(0, 20), pady=0, sticky="")
+
+        # markdup language editor table selector
+        self.label_lang = CTkLabel(self, text="Select Markup", fg_color="#222222")
+        self.label_lang.grid(row=3, column=4, padx=(0, 20), pady=(10, 0), sticky="")
+        self.option_lang = CTkOptionMenu(self, values=["Markdown", "LaTeX", "HTML"])
+        self.option_lang.grid(row=4, column=4, padx=(0, 20), pady=(0, 20), sticky="")
+
+        # import table button
+        self.button_import = CTkButton(
+            self, text="Preprocessed", command=self.button_callback
+        )
+        self.button_import.grid(row=5, column=4, padx=(0, 20), pady=(20, 10), sticky="")
+
+        # reset button
+        self.button_reset = CTkButton(
+            self, text="Clear Input", command=self.reset_input_output
+        )
+        self.button_reset.grid(row=6, column=4, padx=(0, 20), pady=20, sticky="")
+
+        # go button
+        self.button_start = CTkButton(
+            master=self, text="Generate", command=self.convert_to_description
+        )
+        self.button_start.grid(
+            row=8, column=4, padx=(0, 20), pady=(40, 20), sticky="nsew"
+        )
+
+    def reset_input_output(self):
+        self.textbox_input.delete("0.0", "end")
+        self.textbox_output.delete("0.0", "end")
+
+    def convert_to_description(self):
+        # get text from textbox_input
+        text_in = self.textbox_input.get("0.0", "end")
+
+        # # tokenize text according to selected language
+        # keywords = []
+        # if self.option_lang.get() == "Markdown":
+        #     keywords = Tokenizer.tokenize_markdown_table(text_in)
+        # # if self.option_lang.get() == "LaTeX":
+        # #     keywords = Tokenizer.tokenize_latex_table(text_in)
+        # # if self.option_lang.get() == "HTML":
+        # #     keywords = Tokenizer.tokenize_html_table(text_in)
+        #
+        # # call selected model to generate description
+        # description = "some text"
+        # if self.option_model.get() == "k2t-base":
+        #     description = ModelLoader.tntsumm(keywords)
+        #
+        # display output
+        self.textbox_output.delete("1.0", "end")
+        self.textbox_output.insert("1.0", text_in)
+
+    def show_splash_screen(self):
+        self.splash_frame = CTkFrame(master=self, fg_color="#222222")
+        self.splash_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        self.splash_image = CTkImage(
+            light_image=Image.open(Pathing.asset_path("tbldsc_black.png")),
+            dark_image=Image.open(Pathing.asset_path("tbldsc_white.png")),
+            size=(276, 76),
+        )
+        self.splash_label = CTkLabel(
+            self.splash_frame, text="", image=self.splash_image
+        )
+        self.splash_label.pack(expand=True)
+
+        self.splash_frame.bind("<Button-1>", self.hide_splash_screen)
+        self.splash_frame.focus_set()
+
+    def hide_splash_screen(self, event=None):
+        self.splash_frame.destroy()
+
+    def button_callback(self):
+        print("button clicked")
+
+
+set_appearance_mode("Dark")
+set_default_color_theme("blue")
+set_widget_scaling(1)
+
+app = Main()
+app.withdraw()
+app.title("tbldsc")
+app.resizable(True, True)
+width = 1024
+height = 576
+app.deiconify()
+x = (app.winfo_screenwidth() // 2) - width // 2
+y = (app.winfo_screenheight() // 2) - height // 2
+app.geometry("%dx%d+%d+%d" % (width, height, x, y))
+app.minsize(1024, 576)
+app.iconphoto(True, PhotoImage(file=Pathing.asset_path("tbldsc_white_logo.png")))
+app.show_splash_screen()
+app.mainloop()

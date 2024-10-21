@@ -87,7 +87,7 @@ List of things to do and questions to answer.
       contlog
 - [x] Finetuned the model that was pretrained on `facebook/bart-large` model for
       table to text tasks
-- [ ] Finetuned it again for summarization task using SciGen dataset
+- [x] Finetuned it again for summarization task using SciGen dataset
 
 ## Some solutions
 

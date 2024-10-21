@@ -2,3 +2,5 @@ torch==2.4.1
 transformers==4.45.2
 pandas==2.2.3
 nltk==3.9.1
+customtkinter==5.2.2
+pillow==11.0.0
