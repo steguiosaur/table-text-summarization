@@ -12,6 +12,7 @@ from customtkinter import (
     set_widget_scaling,
 )
 from utils.pathing import Pathing
+
 # from preprocess.tokenizer import Tokenizer
 
 # from models.modelloader import ModelLoader
@@ -29,7 +30,9 @@ class Main(Tk):
         # create a frame to contain the label and textbox together
         self.frame_input = CTkFrame(self, fg_color="#222222")
         self.frame_input.grid(row=0, column=0, rowspan=8, columnspan=3, sticky="nsew")
-        self.label_input = CTkLabel(self.frame_input, text="INPUT TEXT AND TABLE", fg_color="#222222")
+        self.label_input = CTkLabel(
+            self.frame_input, text="INPUT TEXT AND TABLE", fg_color="#222222"
+        )
         self.label_input.pack(side="top", anchor="nw", padx=20, pady=(10, 0))
         self.textbox_input = CTkTextbox(self.frame_input, fg_color="#2e2e2e")
         self.textbox_input.pack(fill="both", expand=True, padx=20, pady=(0, 0))
@@ -37,9 +40,13 @@ class Main(Tk):
         # show output and error messages
         self.frame_output = CTkFrame(self, fg_color="#222222")
         self.frame_output.grid(row=8, column=0, columnspan=3, sticky="nsew")
-        self.label_output = CTkLabel(self.frame_output, text="GENERATED SUMMARY", fg_color="#222222")
+        self.label_output = CTkLabel(
+            self.frame_output, text="GENERATED SUMMARY", fg_color="#222222"
+        )
         self.label_output.pack(side="top", anchor="nw", padx=20, pady=(10, 0))
-        self.textbox_output = CTkTextbox(self.frame_output, height=100, fg_color="#2e2e2e")
+        self.textbox_output = CTkTextbox(
+            self.frame_output, height=100, fg_color="#2e2e2e"
+        )
         self.textbox_output.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
         # logo image
@@ -54,7 +61,17 @@ class Main(Tk):
         # model selector
         self.label_model = CTkLabel(self, text="Select Model", fg_color="#222222")
         self.label_model.grid(row=1, column=4, padx=(0, 20), pady=(20, 0), sticky="")
-        self.option_model = CTkOptionMenu(self, values=["k2t-base", "model2"])
+        self.option_model = CTkOptionMenu(
+            self,
+            values=[
+                "bart",
+                "bart-lf-rb",
+                "bart-lf-cl",
+                "bart-gc",
+                "bart-cg",
+                "bart-gcg",
+            ],
+        )
         self.option_model.grid(row=2, column=4, padx=(0, 20), pady=0, sticky="")
 
         # markdup language editor table selector
@@ -149,5 +166,5 @@ y = (app.winfo_screenheight() // 2) - height // 2
 app.geometry("%dx%d+%d+%d" % (width, height, x, y))
 app.minsize(1024, 576)
 app.iconphoto(True, PhotoImage(file=Pathing.asset_path("tbldsc_white_logo.png")))
-app.show_splash_screen()
+# app.show_splash_screen()
 app.mainloop()
