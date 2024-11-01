@@ -1678,9 +1678,9 @@ def pattern_match(logic, truth):
 
 def validation_task(val_file, model, tokenizer, split, args):
     if args.task == 'summ':
-        val_dataset = ScigenDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.add_type, args.pre_com)
+        val_dataset = ScigenDataset(val_file, tokenizer, args.max_src_len, args.max_tgt_len, args.add_type, args.pre_com)
     else: 
-        val_dataset = ContlogDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task, args.add_type, args.pre_com)
+        val_dataset = ContlogDataset(val_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task, args.add_type, args.pre_com)
     val_loader = DataLoader(val_dataset,
                             num_workers=5,
                             batch_size=args.batch_size,
@@ -1880,6 +1880,63 @@ import pandas as pd
 from tqdm import tqdm
 
 def linearize_table_data(data: dict, add_type: bool = False, pre_com: bool = False) -> dict:
+    # Extract the json structure
+    table_caption = data["table_caption"]
+    table_header = data["table_column_names"]
+    table_contents = data["table_content_values"]
+    textual_data = data["long_text"]
+
+    # Initialize source text with the caption
+    src_text = f"<table> <caption> {str(table_caption)} </caption> "
+
+    # # convert table data to pandas for easier indexing
+    # pd_in = defaultdict(list)
+    # for ind, header in enumerate(table_header):
+    #     for row in table_contents:
+    #         pd_in[header].append(row[ind])
+    #     else:
+    #         pd_in[header].append(None)
+    # pd_table = pd.DataFrame(pd_in)
+    #
+    # # Linearize the entire table (exclude highlights for now)
+    # for row_idx in range(len(pd_table)):
+    #     for col_header in pd_table.columns:
+    #         cell_value = pd_table[col_header].iloc[row_idx]
+    #         # Construct cell string for each cell in the table
+    #         cell_str = f"<cell> {cell_value} <col_header> {col_header} </col_header> <row_idx> {row_idx} </row_idx> </cell> "
+    #         src_text += cell_str
+
+    # Initialize a list to hold the linearized data
+    linearized_data = []
+
+    # Determine the number of rows (assuming all rows are of equal length)
+    num_rows = len(table_contents)
+
+    # Create a linearized representation of the table
+    for row_idx in range(num_rows):
+        for header in table_header:
+            # Get the index of the current header
+            header_index = table_header.index(header)
+            # Get the corresponding cell value, or None if out of bounds
+            cell_value = table_contents[row_idx][header_index] if header_index < len(table_contents[row_idx]) else None
+            
+            # Construct cell string for each cell in the table
+            cell_str = f"<cell> {cell_value} <col_header> {header} </col_header> <row_idx> {row_idx} </row_idx> </cell> "
+            linearized_data.append(cell_str)
+
+    # Join all cell strings together and add to source text
+    src_text += ''.join(linearized_data)
+
+    # Add caption at the end of the table linearization
+    src_text += f"</table> {textual_data}"
+
+    # Assign linearized text to 'src_text' field in data
+    data['src_text'] = src_text
+
+    return data
+
+
+def old_linearize_table_data(data: dict, add_type: bool = False, pre_com: bool = False) -> dict:
     '''
     Args:
         data: input JSON structure containing the table and highlighted data.
@@ -1938,7 +1995,7 @@ def linearize_table_data(data: dict, add_type: bool = False, pre_com: bool = Fal
     return data
 
 
-def preprocess_summarization(data_file: str, add_type: bool, pre_com: bool):
+def old_preprocess_summarization(data_file: str, add_type: bool, pre_com: bool):
     with open(data_file, 'r') as f:
         data = json.load(f)
 
@@ -1974,6 +2031,52 @@ def preprocess_summarization(data_file: str, add_type: bool, pre_com: bool):
                 'table_content_values': table_content_values,
                 'segmented_text': segmented_data_with_actions,
                 'highlight_cells': highlight_cells
+            }
+
+            # Linearize the table and add src_text
+            processed_item = linearize_table_data(processed_item, add_type, pre_com)
+
+            # Add the processed item to the preprocessed data list
+            preprocessed_data.append(processed_item)
+
+        return preprocessed_data
+
+def preprocess_summarization(data_file: str, add_type: bool, pre_com: bool):
+    with open(data_file, 'r') as f:
+        data = json.load(f)
+
+        preprocessed_data = []
+
+        # Process each item in the dataset
+        for key, item in tqdm(data.items()):
+            # Extract relevant fields
+            table_caption = item['table_caption']
+            table_column_names = item['table_column_names']
+            table_content_values = item['table_content_values']
+            textual_data = item['long_text']
+            text = item['text']
+            
+            # Segment the text
+            segmented_data = segment_text(text)
+            
+            # Classify logical types for segmented sentences
+            segmented_data_with_actions = [
+                {
+                    'text': sentence,
+                    'action': classify_logical_type(sentence)
+                } for sentence in segmented_data
+            ]
+            
+            # Highlight table data based on segmented sentences
+            highlight_cells = highlight_tabular_data(segmented_data_with_actions, table_content_values)
+
+            # Prepare the data structure
+            processed_item = {
+                'table_caption': table_caption,
+                'table_column_names': table_column_names,
+                'table_content_values': table_content_values,
+                'long_text': textual_data,
+                'text': text,
             }
 
             # Linearize the table and add src_text
@@ -2067,12 +2170,12 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer', default='Adamw', choices=['Adamw', 'Adafactor'], type=str)
     parser.add_argument('--epoch', default=1, type=int, help="number of epochs for training")
     parser.add_argument('--batch_size', default=5 , type=int)
-    parser.add_argument('--learning_rate', default=1e-5, type=float)
+    parser.add_argument('--learning_rate', default=5e-5, type=float)
     parser.add_argument('--every', default=50, type=int, help="interval for evaluation")
     parser.add_argument('--interval_type', default='step', type=str, choices=['step', 'epoch'], help="whether to evaluate at intervals based on steps or epochs")
     parser.add_argument('--interval_step', default=1000, type=int, help="interval for evaluation when interval_type = step.")
     parser.add_argument('--load_from', default=None, type=str, help="model checkpoint path")
-    parser.add_argument('--max_src_len', default=500, type=int, help="max length of input sequence")
+    parser.add_argument('--max_src_len', default=1024, type=int, help="max length of input sequence")
     parser.add_argument('--max_tgt_len', default=200, type=int, help="target output length")
     parser.add_argument('--gradient_accumulation_steps', type=int, default=5, help="number of steps to accumulate gradients before updating parameters")
 
@@ -2113,7 +2216,7 @@ if __name__ == '__main__':
             par.requires_grad = False
 
     # loss function
-    criterion = nn.CrossEntropyLoss(reduction='none', ignore_index=-1)
+    #criterion = nn.CrossEntropyLoss(reduction='none', ignore_index=-1)
 
     # create directories to store logs and models
     if not os.path.exists(os.path.join(args.log_path, args.affix)):
@@ -2131,9 +2234,9 @@ if __name__ == '__main__':
         val_file = os.path.join(args.data_path, 'val.json')
         test_file = os.path.join(args.data_path, 'test.json')
     elif args.task == 'summ':
-        train_file = os.path.join(args.data_path, 'train/few-shot/train (1).json')
-        val_file = os.path.join(args.data_path, 'development/few-shot/dev.json')
-        test_file = os.path.join(args.data_path, 'test/test-CL.json')
+        train_file = os.path.join(args.data_path, 'train-400.json')
+        val_file = os.path.join(args.data_path, 'valid-50.json')
+        test_file = os.path.join(args.data_path, 'test-50.json')
     else:
         raise NotImplementedError
 
@@ -2175,10 +2278,6 @@ if __name__ == '__main__':
                 lm_labels[lm_labels == tokenizer.pad_token_id] = -100
                 ids = batch['source_ids'].to(args.device, dtype=torch.long)
                 mask = batch['source_mask'].to(args.device, dtype=torch.long)
-
-                # print("Input IDs shape:", ids.shape)
-                # print("Attention Mask shape:", mask.shape)
-                # print("Labels shape:", lm_labels.shape)
 
                 # forward pass and loss calculation
                 outputs = model(input_ids=ids, attention_mask=mask, labels=lm_labels)
