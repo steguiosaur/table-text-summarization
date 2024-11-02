@@ -12,15 +12,18 @@ from customtkinter import (
     set_widget_scaling,
 )
 from utils.pathing import Pathing
-
-# from preprocess.tokenizer import Tokenizer
-
-# from models.modelloader import ModelLoader
+from preprocess.preprocess import Preprocess
+from models.modelloader import ModelLoader
 
 
 class Main(Tk):
+    model_loader = None
+
     def __init__(self):
         super().__init__()
+
+        self.model = None
+        self.tokenizer = None
 
         self.configure(bg="#222222")
 
@@ -59,18 +62,14 @@ class Main(Tk):
         self.label_logo.grid(row=0, column=4, padx=(0, 20), pady=20, sticky="n")
 
         # model selector
-        self.label_model = CTkLabel(self, text="Select Model", fg_color="#222222")
+        self.label_model = CTkLabel(self, text="Current Model", fg_color="#222222")
         self.label_model.grid(row=1, column=4, padx=(0, 20), pady=(20, 0), sticky="")
         self.option_model = CTkOptionMenu(
             self,
             values=[
-                "bart",
-                "bart-lf-rb",
-                "bart-lf-cl",
-                "bart-gc",
-                "bart-cg",
-                "bart-gcg",
+                "bart-lf-summ",
             ],
+            command=self.load_model,
         )
         self.option_model.grid(row=2, column=4, padx=(0, 20), pady=0, sticky="")
 
@@ -88,43 +87,48 @@ class Main(Tk):
 
         # reset button
         self.button_reset = CTkButton(
-            self, text="Clear Input", command=self.reset_input_output
+            self, text="Clear Input", command=self.delete_input_output
         )
         self.button_reset.grid(row=6, column=4, padx=(0, 20), pady=20, sticky="")
 
         # go button
         self.button_start = CTkButton(
-            master=self, text="Generate", command=self.convert_to_description
+            master=self, text="Generate", command=self.generate_summary
         )
         self.button_start.grid(
             row=8, column=4, padx=(0, 20), pady=(40, 20), sticky="nsew"
         )
 
-    def reset_input_output(self):
+    def load_model(self, selected_model=None):
+        selected_model = selected_model or self.option_model.get()
+        
+        if selected_model == "bart-lf-summ":
+            model_path = Pathing.model_path("bart-large-ep1.pt")
+            self.model_loader = ModelLoader("facebook/bart-large", model_path)
+            self.model, self.tokenizer = self.model_loader.tntsumm()
+        else:
+            print(f"Model '{selected_model}' is not configured.")
+
+    def delete_input_output(self):
         self.textbox_input.delete("0.0", "end")
         self.textbox_output.delete("0.0", "end")
 
-    def convert_to_description(self):
-        # get text from textbox_input
+    def generate_summary(self):
         text_in = self.textbox_input.get("0.0", "end")
-
-        # # tokenize text according to selected language
-        # keywords = []
-        # if self.option_lang.get() == "Markdown":
-        #     keywords = Tokenizer.tokenize_markdown_table(text_in)
-        # # if self.option_lang.get() == "LaTeX":
-        # #     keywords = Tokenizer.tokenize_latex_table(text_in)
-        # # if self.option_lang.get() == "HTML":
-        # #     keywords = Tokenizer.tokenize_html_table(text_in)
-        #
-        # # call selected model to generate description
-        # description = "some text"
-        # if self.option_model.get() == "k2t-base":
-        #     description = ModelLoader.tntsumm(keywords)
-        #
-        # display output
-        self.textbox_output.delete("1.0", "end")
-        self.textbox_output.insert("1.0", text_in)
+        preprocess_dict = Preprocess.parse_markdown(text_in)
+        linearized_tbl = Preprocess.linearize_table_data(preprocess_dict)
+        
+        if self.model_loader and self.model and self.tokenizer:
+            try:
+                generate_output = self.model_loader.generate_output(linearized_tbl['src_text'])
+                self.textbox_output.delete("1.0", "end")
+                self.textbox_output.insert("1.0", generate_output)
+            except Exception as e:
+                self.textbox_output.delete("1.0", "end")
+                self.textbox_output.insert("1.0", f"Error generating summary: {e}")
+        else:
+            self.textbox_output.delete("1.0", "end")
+            self.textbox_output.insert("1.0", "Model not loaded. Please select a model.")
 
     def show_splash_screen(self):
         self.splash_frame = CTkFrame(master=self, fg_color="#222222")

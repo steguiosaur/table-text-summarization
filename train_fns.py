@@ -25,8 +25,9 @@
 - pretrain table2logic and finetune to table2text and to summarization model 
 """
 
-
+import math
 from torch.utils.data import Dataset
+from torch import nn
 import torch
 import json
 
@@ -91,7 +92,7 @@ import argparse
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, Adafactor, AdamW
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AdamW
 from tqdm import tqdm
 import os
 
@@ -102,11 +103,9 @@ def set_seed(seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-def train(args):
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default="facebook/bart-base")
+    parser.add_argument('--model', type=str, default="facebook/bart-base")
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--do_train', default=False, action="store_true", help="whether to perform training")
     parser.add_argument('--do_test', default=False, action="store_true", help="whether to perform test")
@@ -114,30 +113,30 @@ if __name__ == "__main__":
     parser.add_argument('--optimizer', default='Adamw', choices=['Adamw', 'Adafactor'], type=str)
     parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--batch_size', type=int, default=5)
-    parser.add_argument('--learning_rate', type=float, default=1e-5)
+    parser.add_argument('--learning_rate', type=float, default=5e-5)
+    parser.add_argument('--every', default=50, type=int, help="interval for evaluation")
     parser.add_argument('--interval_type', default='step', type=str, choices=['step', 'epoch'], help="whether to evaluate at intervals based on steps or epochs")
     parser.add_argument('--interval_step', default=1000, type=int, help="interval for evaluation when interval_type = step.")
     parser.add_argument('--load_from', default=None, type=str, help="model checkpoint path")
-    parser.add_argument('--max_src_len', default=500, type=int, help="max length of input sequence")
+    parser.add_argument('--max_src_len', default=1024, type=int, help="max length of input sequence")
     parser.add_argument('--max_tgt_len', default=200, type=int, help="target output length")
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=5, help="number of steps to accumulate gradients before updating parameters")
 
-    parser.add_argument('--data_path', type=str, default='/content/drive/MyDrive/Dataset/contlog')
+    parser.add_argument('--data_path', type=str, default='/content/drive/MyDrive/Dataset/SciGenMod')
     parser.add_argument('--log_path',type=str, default='/content/drive/MyDrive/Output/logs/d2t/outputs')
     parser.add_argument('--ckpt_path', type=str, default='/content/drive/MyDrive/Output/models/d2t')
-    parser.add_argument('--train_file', type=str, required=True, help="Path to training data")
-    parser.add_argument('--val_file', type=str, required=True, help="Path to validation data")
-    parser.add_argument('--test_file', type=str, required=True, help="Path to test data")
-
-    # parser.add_argument('--save_model', action='store_true')
-    # parser.add_argument('--save_path', type=str, default="./checkpoints")
+    parser.add_argument('--train_file', type=str, required=True, help="Path to training data", default='train-400.json')
+    parser.add_argument('--val_file', type=str, required=True, help="Path to validation data", default='valid-50.json')
+    parser.add_argument('--test_file', type=str, required=True, help="Path to test data", default='test-50.json')
     parser.add_argument('--device', type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument('--affix', type=str, default=None, required=True, help="The experiment name")
     parser.add_argument('--n_gpu', type=str, default=0, help="number of GPU to use")
     parser.add_argument('--task', type=str, default='text', help='task: only text (ot), gc, cg, gcg')
     parser.add_argument('--global_step', default=1, type=int, help="initialize global step counter")
     parser.add_argument('--use_cache', default=False, action="store_true", help="enable caching mechanisms")
-    args = parser.parse_args()
 
+    args = parser.parse_args()
+    args.n_gpu = torch.cuda.device_count()
     set_seed(args.seed)
 
     # Load tokenizer and model
@@ -145,41 +144,65 @@ if __name__ == "__main__":
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name)
     model.to(args.device)
 
-    # Load dataset
-    train_dataset = FnsDataset(args.train_data, tokenizer, args.max_src_len, args.max_tgt_len, args.task)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    # layer freezing for retaining features
+    def freeze_params(model: nn.Module):
+        for par in model.parameters():
+            par.requires_grad = False
 
-    # Optimizer
-    optimizer = AdamW(model.parameters(), lr=args.learning_rate)
+    if args.do_train:
+        # freeze parameters
+        for d in [model.model.encoder, model.model.decoder]:
+            freeze_params(d.embed_tokens)
 
-    # Training loop
-    model.train()
-    for epoch in range(args.epochs):
-        total_loss = 0
-        for batch in tqdm(train_loader, desc=f"Training Epoch {epoch + 1}"):
-            optimizer.zero_grad()
+        # Load dataset
+        train_dataset = FnsDataset(args.train_data, tokenizer, args.max_src_len, args.max_tgt_len, args.task)
+        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+        model.train()
 
-            # Prepare inputs and targets
-            input_ids = batch['source_ids'].to(args.device)
-            attention_mask = batch['source_mask'].to(args.device)
-            labels = batch['target_ids'].to(args.device)
+        # Optimizer
+        optimizer = AdamW(model.parameters(), lr=args.learning_rate)
 
-            # Forward pass
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-            loss = outputs.loss
+        global_step = 0
+        total_loss = []
+        best_val = 0
 
-            # Backward pass
-            loss.backward()
-            optimizer.step()
+        # Training loop
+        for epoch in range(1, args.epochs + 1):
+            print("[INFO] start training {}th epoch".format(epoch))
+            for idx, batch in enumerate(tqdm(train_loader)):
+                # Prepare inputs and targets
+                labels = batch['target_ids'].to(args.device, dtype=torch.long)
+                labels[labels == tokenizer.pad_token_id] = -100
+                input_ids = batch['source_ids'].to(args.device, dtype=torch.long)
+                attention_mask = batch['source_mask'].to(args.device, dtype=torch.long)
 
-            total_loss += loss.item()
+                optimizer.zero_grad()
 
-        print(f"Epoch {epoch + 1} - Loss: {total_loss / len(train_loader)}")
+                # Forward pass
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
 
-        # Save model checkpoint
-        if args.save_model:
-            output_dir = os.path.join(args.save_path, f"epoch_{epoch + 1}")
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
-            model.save_pretrained(output_dir)
-            tokenizer.save_pretrained(output_dir)
+                # gradient accumulation, loss scaling, and backpropagation
+                loss = loss / args.gradient_accumulation_steps
+                total_loss.append(loss.item())
+                loss.backward()
+
+                # optimizer update model parameter using gradients every gradient accumulation step 
+                if (idx + 1) % args.gradient_accumulation_steps == 0 or (idx + 1) == len(train_loader):
+                    optimizer.step()
+                    model.zero_grad()
+
+                # Perplexity - measure of how well the model is able to predict a sequence every args.every
+                if idx % args.every == 0 and idx > 0:
+                    perplexity = math.exp(np.mean(total_loss))
+                    total_loss = []
+
+            print(f"Epoch {epoch + 1} - Loss: {total_loss / len(train_loader)}")
+
+            # Save model checkpoint
+            if args.save_model:
+                output_dir = os.path.join(args.save_path, f"epoch_{epoch + 1}")
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                model.save_pretrained(output_dir)
+                tokenizer.save_pretrained(output_dir)
