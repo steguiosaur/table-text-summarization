@@ -30,39 +30,59 @@ from torch.utils.data import Dataset
 from torch import nn
 import torch
 import json
+from pyrouge import Rouge155
+import os, io, re, subprocess
+import logging
+
+def preprocess_summarization(data_file: str):
+    with open(data_file, 'r') as f:
+        data = json.load(f)
+
+        preprocessed_data = []
+
+        # Process each item in the dataset
+        for key, item in tqdm(data.items()):
+            # Extract relevant fields
+            table_caption = item['table_caption']
+            table_column_names = item['table_column_names']
+            table_content_values = item['table_content_values']
+            textual_data = item['long_text']
+            text = item['text']
+
+            # Prepare the data structure
+            processed_item = {
+                'table_caption': table_caption,
+                'table_column_names': table_column_names,
+                'table_content_values': table_content_values,
+                'long_text': textual_data,
+                'text': text,
+            }
+
+            # Add the processed item to the preprocessed data list
+            preprocessed_data.append(processed_item)
+
+        return preprocessed_data
 
 class FnsDataset(Dataset): 
     def __init__(self, data_file, tokenizer, max_src_len, max_tgt_len, task):
-        self.data = self.load_data(data_file)
+        self.data = preprocess_summarization(data_file)
         self.max_src_len = max_src_len
         self.max_tgt_len = max_tgt_len
         self.tokenizer = tokenizer
         self.task = task
         
-    def load_data(self, file):
-        # Format: [{'document': doc_text, 'summary': summary_text}, ...]
-        with open(file, 'r') as f:
-            data = json.load(f)
-        return data
-
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
         d = self.data[index]
-        src_text = d['src_text'].strip()
+        if self.task == 'ot':
+            src_text = d['long_text'].strip()
+        else:
+            src_text = d['src_text'].strip()
         src_text = ' '.join(src_text.split())
 
-        # if self.task == 'text' and 'sent' in d:
-        #     tgt_text = d['sent'].strip()
-        # elif self.task == 'logic' and 'logic_str' in d:
-        #     tgt_text = d['logic_str'].strip()
-        if self.task == 'ot' and 'text' in d:
-            tgt_text = d['text'].strip()
-        if self.task == 'gc' and 'long_text' in d:
-            tgt_text = d['long_text'].strip()
-        else:
-            raise NotImplementedError
+        tgt_text = d['text'].strip()
         tgt_text = ' '.join(tgt_text.split())
 
         source = self.tokenizer(
@@ -87,6 +107,100 @@ class FnsDataset(Dataset):
             'source_mask': source_mask,
             'target_ids': target_input_ids
         }
+
+def validation_task(val_file, model, tokenizer, split, args):
+    val_dataset = FnsDataset(val_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task)
+    val_loader = DataLoader(val_dataset,
+                            num_workers=5,
+                            batch_size=args.batch_size,
+                            shuffle=False)
+    model.eval()
+    pred_list = []
+    ref_list = []
+
+    # create files for scripts
+    gt = open(os.path.join(args.log_path, args.affix, f'references_{split}.txt'), 'w')
+    pred = open(os.path.join(args.log_path, args.affix, f'predictions_{split}.txt'), 'w')
+    pred_split = os.path.join(args.log_path, args.affix, f'predictions_{split}/')
+    ref_split = os.path.join(args.log_path, args.affix, f'references_{split}/')
+    if not os.path.exists(pred_split):
+        os.makedirs(pred_split)
+    if not os.path.exists(ref_split):
+        os.makedirs(ref_split)
+    k = 0
+    with torch.no_grad():
+        for idx, batch in enumerate(tqdm(val_loader)):
+            y = batch['target_ids'].to(args.device, dtype=torch.long)
+            ids = batch['source_ids'].to(args.device, dtype=torch.long)
+            mask = batch['source_mask'].to(args.device, dtype=torch.long)
+            samples = model.generate(
+                input_ids=ids,
+                attention_mask=mask,
+                max_length=args.max_tgt_len,
+                num_beams=4,
+                early_stopping=False
+            )
+
+
+            for reference, s in zip(y, samples):
+                with open(ref_split + str(k) + '_reference.txt', 'w') as sr, \
+                        open(pred_split + str(k) + '_prediction.txt', 'w') as sw:
+                    reference = tokenizer.decode(reference, skip_special_tokens=True,
+                                                 clean_up_tokenization_spaces=False)
+                    gt.write(reference.lower() + '\n')
+                    sr.write(reference.lower() + '\n')
+                    ref_list.append(reference.lower())
+                    text = tokenizer.decode(s, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+                    pred_list.append(text.lower())
+                    pred.write(text.lower() + '\n')
+                    sw.write(text.lower() + '\n')
+                    k += 1
+        gt.close()
+        pred.close()
+
+        if args.task == 'text' or args.task == 'ot':
+            gt = os.path.join(args.log_path, args.affix, f'references_{split}.txt')
+            pred = os.path.join(args.log_path, args.affix, f'predictions_{split}.txt')
+            # bleu4 = bleu_score(gt, pred)
+            # print("[INFO] {} BLEU score = {}".format(split, bleu4))
+            # log_file.write("[INFO] {} BLEU score = {}\n".format(split, bleu4))
+
+            # ROUGE scripts
+            r = Rouge155()
+            r.system_dir = os.path.join(args.log_path, args.affix, f'predictions_{split}/')
+            r.model_dir = os.path.join(args.log_path, args.affix, f'references_{split}/')
+            # define the patterns
+            r.system_filename_pattern = '(\d+)_prediction.txt'
+            r.model_filename_pattern = '#ID#_reference.txt'
+            logging.getLogger('global').setLevel(logging.WARNING)  # silence pyrouge logging
+            results_dict = r.convert_and_evaluate()
+            rouge_result = "\n".join(
+                [results_dict.split("\n")[3], results_dict.split("\n")[7], results_dict.split("\n")[15],
+                 results_dict.split("\n")[19]])
+            print("[INFO] Rouge scores: \n", rouge_result)
+            # log_file.write(rouge_result + '\n')
+            results_dict = results_dict.split("\n")
+            rouge_score_list = []
+
+            for i in [3, 7, 15, 19]:
+                results = results_dict[i]
+                rouge_score = float(results.split()[3])
+                rouge_score_list.append(rouge_score * 100)
+
+        val_metric_dict = {}
+        if args.task == 'ot' or args.task == 'summ':
+            for type, score in zip(['1', '2', '4', 'L'], rouge_score_list):
+                val_metric_dict[f'rouge{type}'] = score
+            # val_metric_dict['bleu4'] = bleu4
+        elif args.task == 'logic':
+            val_metric_dict = {"exec_acc": acc_exact,
+                               "pat_acc": acc_p,
+                               "LF_acc": acc_e
+                               }
+        else:
+            raise NotImplementedError
+        model.train()
+        return val_metric_dict
 
 import argparse
 import torch
@@ -140,8 +254,8 @@ if __name__ == "__main__":
     set_seed(args.seed)
 
     # Load tokenizer and model
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    model = AutoModelForSeq2SeqLM.from_pretrained(args.model)
     model.to(args.device)
 
     # layer freezing for retaining features
@@ -149,13 +263,23 @@ if __name__ == "__main__":
         for par in model.parameters():
             par.requires_grad = False
 
+    # create directories to store logs and models
+    if not os.path.exists(os.path.join(args.log_path, args.affix)):
+        os.makedirs(os.path.join(args.log_path, args.affix))
+    if not os.path.exists(os.path.join(args.ckpt_path, args.affix)):
+        os.makedirs(os.path.join(args.ckpt_path, args.affix))
+
+    train_file = os.path.join(args.data_path, args.train_file)
+    val_file = os.path.join(args.data_path, args.val_file)
+    test_file = os.path.join(args.data_path, args.test_file)
+
     if args.do_train:
         # freeze parameters
         for d in [model.model.encoder, model.model.decoder]:
             freeze_params(d.embed_tokens)
 
         # Load dataset
-        train_dataset = FnsDataset(args.train_data, tokenizer, args.max_src_len, args.max_tgt_len, args.task)
+        train_dataset = FnsDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task)
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
         model.train()
 
@@ -197,12 +321,20 @@ if __name__ == "__main__":
                     perplexity = math.exp(np.mean(total_loss))
                     total_loss = []
 
-            print(f"Epoch {epoch + 1} - Loss: {total_loss / len(train_loader)}")
+                # save model every args.interval_type step or epoch
+                if (args.interval_type == 'step' and global_step % args.interval_step == 0 and global_step > 0) \
+                    or (args.interval_type == 'epoch' and (idx + 1) == len(train_loader)):
+                    if args.interval_type == 'step':
+                        torch.save(model.state_dict(), '{}/{}/{}_step{}.pt'.format(args.ckpt_path, args.affix, args.model.split('/')[-1], global_step))
+                    else:
+                        torch.save(model.state_dict(), '{}/{}/{}_ep{}.pt'.format(args.ckpt_path, args.affix, args.model.split('/')[-1], epoch))
 
-            # Save model checkpoint
-            if args.save_model:
-                output_dir = os.path.join(args.save_path, f"epoch_{epoch + 1}")
-                if not os.path.exists(output_dir):
-                    os.makedirs(output_dir)
-                model.save_pretrained(output_dir)
-                tokenizer.save_pretrained(output_dir)
+                    # validation step
+                    val_scores = validation_task(val_file, model, tokenizer, 'valid', args)
+                    test_scores = validation_task(test_file, model, tokenizer, 'test', args)
+                global_step += 1
+
+    # just test model, no training
+    if args.do_test:
+        test_scores = validation_task(test_file, model, tokenizer, 'test', args)
+        print(test_scores)

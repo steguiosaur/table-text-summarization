@@ -13,6 +13,4 @@ class Pathing:
 
     @staticmethod
     def model_path(path: str) -> Path:
-        full_path = Pathing.MODELS_PATH / Path(path)
-        os.makedirs(full_path.parent, exist_ok=True)
-        return full_path
+        return Pathing.MODELS_PATH / Path(path)

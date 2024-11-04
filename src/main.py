@@ -118,7 +118,7 @@ class Main(Tk):
         preprocess_dict = Preprocess.parse_markdown(text_in)
         linearized_tbl = Preprocess.linearize_table_data(preprocess_dict)
         
-        if self.model_loader and self.model and self.tokenizer:
+        if self.model_loader:
             try:
                 generate_output = self.model_loader.generate_output(linearized_tbl['src_text'])
                 self.textbox_output.delete("1.0", "end")
