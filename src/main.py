@@ -99,6 +99,8 @@ class Main(Tk):
             row=8, column=4, padx=(0, 20), pady=(40, 20), sticky="nsew"
         )
 
+        self.load_model()
+
     def load_model(self, selected_model=None):
         selected_model = selected_model or self.option_model.get()
         
