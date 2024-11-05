@@ -80,7 +80,7 @@ class Main(Tk):
         self.option_model.grid(row=2, column=4, padx=(0, 20), pady=0, sticky="")
 
         # markdup language editor table selector
-        self.label_lang = CTkLabel(self, text="Select Markup", fg_color="#222222")
+        self.label_lang = CTkLabel(self, text="Markup Language", fg_color="#222222")
         self.label_lang.grid(row=3, column=4, padx=(0, 20), pady=(10, 0), sticky="")
         self.option_lang = CTkOptionMenu(self, values=["Markdown"])
         self.option_lang.grid(row=4, column=4, padx=(0, 20), pady=(0, 20), sticky="")
@@ -114,7 +114,6 @@ class Main(Tk):
             model_path = Pathing.model_path("bart-large_ep1.pt")
             self.model_loader = ModelLoader("facebook/bart-large", model_path)
             self.model, self.tokenizer = self.model_loader.tntsumm()
-            pass
         else:
             print(f"Model '{selected_model}' is not configured.")
 
