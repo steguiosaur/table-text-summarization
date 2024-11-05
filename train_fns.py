@@ -34,6 +34,45 @@ from pyrouge import Rouge155
 import os, io, re, subprocess
 import logging
 
+def linearize_table_data(data: dict, add_type: bool = False, pre_com: bool = False) -> dict:
+    # Extract the json structure
+    table_caption = data["table_caption"]
+    table_header = data["table_column_names"]
+    table_contents = data["table_content_values"]
+    # textual_data = data["long_text"]
+
+    # Initialize source text with the caption
+    src_text = f"<table> <caption> {str(table_caption)} </caption> "
+
+    # Initialize a list to hold the linearized data
+    linearized_data = []
+
+    # Determine the number of rows (assuming all rows are of equal length)
+    num_rows = len(table_contents)
+
+    # Create a linearized representation of the table
+    for row_idx in range(num_rows):
+        for header in table_header:
+            # Get the index of the current header
+            header_index = table_header.index(header)
+            # Get the corresponding cell value, or None if out of bounds
+            cell_value = table_contents[row_idx][header_index] if header_index < len(table_contents[row_idx]) else None
+            
+            # Construct cell string for each cell in the table
+            cell_str = f"<cell> {cell_value} <col_header> {header} </col_header> <row_idx> {row_idx} </row_idx> </cell> "
+            linearized_data.append(cell_str)
+
+    # Join all cell strings together and add to source text
+    src_text += ''.join(linearized_data)
+
+    # Add caption at the end of the table linearization
+    src_text += f"</table>"
+
+    # Assign linearized text to 'src_text' field in data
+    data['src_text'] = src_text
+
+    return data
+
 def preprocess_summarization(data_file: str):
     with open(data_file, 'r') as f:
         data = json.load(f)
@@ -57,6 +96,9 @@ def preprocess_summarization(data_file: str):
                 'long_text': textual_data,
                 'text': text,
             }
+
+            # Linearize the table and add src_text
+            processed_item = linearize_table_data(processed_item)
 
             # Add the processed item to the preprocessed data list
             preprocessed_data.append(processed_item)
@@ -108,7 +150,7 @@ class FnsDataset(Dataset):
             'target_ids': target_input_ids
         }
 
-def validation_task(val_file, model, tokenizer, split, args):
+def validation_task(val_file, summ_model, summ_tokenizer, tbltxt_model, tbltxt_tokenizer, split, args):
     val_dataset = FnsDataset(val_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task)
     val_loader = DataLoader(val_dataset,
                             num_workers=5,
@@ -191,15 +233,8 @@ def validation_task(val_file, model, tokenizer, split, args):
         if args.task == 'ot' or args.task == 'summ':
             for type, score in zip(['1', '2', '4', 'L'], rouge_score_list):
                 val_metric_dict[f'rouge{type}'] = score
-            # val_metric_dict['bleu4'] = bleu4
-        elif args.task == 'logic':
-            val_metric_dict = {"exec_acc": acc_exact,
-                               "pat_acc": acc_p,
-                               "LF_acc": acc_e
-                               }
         else:
             raise NotImplementedError
-        model.train()
         return val_metric_dict
 
 import argparse
@@ -231,7 +266,8 @@ if __name__ == "__main__":
     parser.add_argument('--every', default=50, type=int, help="interval for evaluation")
     parser.add_argument('--interval_type', default='step', type=str, choices=['step', 'epoch'], help="whether to evaluate at intervals based on steps or epochs")
     parser.add_argument('--interval_step', default=1000, type=int, help="interval for evaluation when interval_type = step.")
-    parser.add_argument('--load_from', default=None, type=str, help="model checkpoint path")
+    parser.add_argument('--summ_load_from', default=None, type=str, help="model checkpoint path")
+    parser.add_argument('--tbx_load_from', default=None, type=str, help="model checkpoint path")
     parser.add_argument('--max_src_len', default=1024, type=int, help="max length of input sequence")
     parser.add_argument('--max_tgt_len', default=200, type=int, help="target output length")
     parser.add_argument('--gradient_accumulation_steps', type=int, default=5, help="number of steps to accumulate gradients before updating parameters")
@@ -254,14 +290,21 @@ if __name__ == "__main__":
     set_seed(args.seed)
 
     # Load tokenizer and model
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
-    model = AutoModelForSeq2SeqLM.from_pretrained(args.model)
-    model.to(args.device)
+    summ_tokenizer = AutoTokenizer.from_pretrained(args.model)
+    summ_model = AutoModelForSeq2SeqLM.from_pretrained(args.model)
+    summ_model.to(args.device)
 
-    # layer freezing for retaining features
-    def freeze_params(model: nn.Module):
-        for par in model.parameters():
-            par.requires_grad = False
+    tbltxt_tokenizer = AutoTokenizer.from_pretrained(args.model)
+    markers = ["{", "}", "<table>", "</table>", "<type>", "</type>", "<cell>", "</cell>", "<col_header>", "</col_header>", "<row_idx>", "</row_idx>"]
+    tbltxt_tokenizer.add_tokens(markers)
+    tbltxt_model = AutoModelForSeq2SeqLM.from_pretrained(args.model)
+    tbltxt_model.to(args.device)
+    tbltxt_model.resize_token_embeddings(len(tbltxt_tokenizer))
+
+    if args.summ_load_from is not None:
+        summ_model.load_state_dict(torch.load(args.summ_load_from))
+    if args.tbx_load_from is not None:
+        tbltxt_model.load_state_dict(torch.load(args.tbx_load_from))
 
     # create directories to store logs and models
     if not os.path.exists(os.path.join(args.log_path, args.affix)):
@@ -273,68 +316,7 @@ if __name__ == "__main__":
     val_file = os.path.join(args.data_path, args.val_file)
     test_file = os.path.join(args.data_path, args.test_file)
 
-    if args.do_train:
-        # freeze parameters
-        for d in [model.model.encoder, model.model.decoder]:
-            freeze_params(d.embed_tokens)
-
-        # Load dataset
-        train_dataset = FnsDataset(train_file, tokenizer, args.max_src_len, args.max_tgt_len, args.task)
-        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-        model.train()
-
-        # Optimizer
-        optimizer = AdamW(model.parameters(), lr=args.learning_rate)
-
-        global_step = 0
-        total_loss = []
-        best_val = 0
-
-        # Training loop
-        for epoch in range(1, args.epochs + 1):
-            print("[INFO] start training {}th epoch".format(epoch))
-            for idx, batch in enumerate(tqdm(train_loader)):
-                # Prepare inputs and targets
-                labels = batch['target_ids'].to(args.device, dtype=torch.long)
-                labels[labels == tokenizer.pad_token_id] = -100
-                input_ids = batch['source_ids'].to(args.device, dtype=torch.long)
-                attention_mask = batch['source_mask'].to(args.device, dtype=torch.long)
-
-                optimizer.zero_grad()
-
-                # Forward pass
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-
-                # gradient accumulation, loss scaling, and backpropagation
-                loss = loss / args.gradient_accumulation_steps
-                total_loss.append(loss.item())
-                loss.backward()
-
-                # optimizer update model parameter using gradients every gradient accumulation step 
-                if (idx + 1) % args.gradient_accumulation_steps == 0 or (idx + 1) == len(train_loader):
-                    optimizer.step()
-                    model.zero_grad()
-
-                # Perplexity - measure of how well the model is able to predict a sequence every args.every
-                if idx % args.every == 0 and idx > 0:
-                    perplexity = math.exp(np.mean(total_loss))
-                    total_loss = []
-
-                # save model every args.interval_type step or epoch
-                if (args.interval_type == 'step' and global_step % args.interval_step == 0 and global_step > 0) \
-                    or (args.interval_type == 'epoch' and (idx + 1) == len(train_loader)):
-                    if args.interval_type == 'step':
-                        torch.save(model.state_dict(), '{}/{}/{}_step{}.pt'.format(args.ckpt_path, args.affix, args.model.split('/')[-1], global_step))
-                    else:
-                        torch.save(model.state_dict(), '{}/{}/{}_ep{}.pt'.format(args.ckpt_path, args.affix, args.model.split('/')[-1], epoch))
-
-                    # validation step
-                    val_scores = validation_task(val_file, model, tokenizer, 'valid', args)
-                    test_scores = validation_task(test_file, model, tokenizer, 'test', args)
-                global_step += 1
-
     # just test model, no training
     if args.do_test:
-        test_scores = validation_task(test_file, model, tokenizer, 'test', args)
+        test_scores = validation_task(test_file, summ_model, summ_tokenizer, tbltxt_model, tbltxt_tokenizer, 'test', args)
         print(test_scores)

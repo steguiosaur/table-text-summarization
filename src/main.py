@@ -37,7 +37,9 @@ class Main(Tk):
             self.frame_input, text="INPUT TEXT AND TABLE", fg_color="#222222"
         )
         self.label_input.pack(side="top", anchor="nw", padx=20, pady=(10, 0))
-        self.textbox_input = CTkTextbox(self.frame_input, fg_color="#2e2e2e")
+        self.textbox_input = CTkTextbox(
+            self.frame_input, fg_color="#2e2e2e", font=("Consolas", 12), wrap="word"
+        )
         self.textbox_input.pack(fill="both", expand=True, padx=20, pady=(0, 0))
 
         # show output and error messages
@@ -48,7 +50,11 @@ class Main(Tk):
         )
         self.label_output.pack(side="top", anchor="nw", padx=20, pady=(10, 0))
         self.textbox_output = CTkTextbox(
-            self.frame_output, height=100, fg_color="#2e2e2e"
+            self.frame_output,
+            height=100,
+            fg_color="#2e2e2e",
+            font=("Consolas", 12),
+            wrap="word",
         )
         self.textbox_output.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
@@ -76,18 +82,18 @@ class Main(Tk):
         # markdup language editor table selector
         self.label_lang = CTkLabel(self, text="Select Markup", fg_color="#222222")
         self.label_lang.grid(row=3, column=4, padx=(0, 20), pady=(10, 0), sticky="")
-        self.option_lang = CTkOptionMenu(self, values=["Markdown", "LaTeX", "HTML"])
+        self.option_lang = CTkOptionMenu(self, values=["Markdown"])
         self.option_lang.grid(row=4, column=4, padx=(0, 20), pady=(0, 20), sticky="")
 
         # import table button
-        self.button_import = CTkButton(
-            self, text="Preprocessed", command=self.button_callback
+        self.button_clear = CTkButton(
+            self, text="Clear Output", command=self.delete_output
         )
-        self.button_import.grid(row=5, column=4, padx=(0, 20), pady=(20, 10), sticky="")
+        self.button_clear.grid(row=5, column=4, padx=(0, 20), pady=(20, 10), sticky="")
 
         # reset button
         self.button_reset = CTkButton(
-            self, text="Clear Input", command=self.delete_input_output
+            self, text="Clear All", command=self.delete_input_output
         )
         self.button_reset.grid(row=6, column=4, padx=(0, 20), pady=20, sticky="")
 
@@ -103,11 +109,12 @@ class Main(Tk):
 
     def load_model(self, selected_model=None):
         selected_model = selected_model or self.option_model.get()
-        
+
         if selected_model == "bart-lf-summ":
-            model_path = Pathing.model_path("bart-large-ep1.pt")
+            model_path = Pathing.model_path("bart-large_ep1.pt")
             self.model_loader = ModelLoader("facebook/bart-large", model_path)
             self.model, self.tokenizer = self.model_loader.tntsumm()
+            pass
         else:
             print(f"Model '{selected_model}' is not configured.")
 
@@ -119,10 +126,12 @@ class Main(Tk):
         text_in = self.textbox_input.get("0.0", "end")
         preprocess_dict = Preprocess.parse_markdown(text_in)
         linearized_tbl = Preprocess.linearize_table_data(preprocess_dict)
-        
+
         if self.model_loader:
             try:
-                generate_output = self.model_loader.generate_output(linearized_tbl['src_text'])
+                generate_output = self.model_loader.generate_output(
+                    linearized_tbl["src_text"]
+                )
                 self.textbox_output.delete("1.0", "end")
                 self.textbox_output.insert("1.0", generate_output)
             except Exception as e:
@@ -130,7 +139,9 @@ class Main(Tk):
                 self.textbox_output.insert("1.0", f"Error generating summary: {e}")
         else:
             self.textbox_output.delete("1.0", "end")
-            self.textbox_output.insert("1.0", "Model not loaded. Please select a model.")
+            self.textbox_output.insert(
+                "1.0", "Model not loaded. Please select a model."
+            )
 
     def show_splash_screen(self):
         self.splash_frame = CTkFrame(master=self, fg_color="#222222")
@@ -152,8 +163,8 @@ class Main(Tk):
     def hide_splash_screen(self, event=None):
         self.splash_frame.destroy()
 
-    def button_callback(self):
-        print("button clicked")
+    def delete_output(self):
+        self.textbox_output.delete("0.0", "end")
 
 
 set_appearance_mode("Dark")
