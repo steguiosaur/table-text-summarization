@@ -1732,9 +1732,6 @@ def validation_task(val_file, model, tokenizer, split, args):
         if args.task == 'text' or args.task == 'summ':
             gt = os.path.join(args.log_path, args.affix, f'references_{split}.txt')
             pred = os.path.join(args.log_path, args.affix, f'predictions_{split}.txt')
-            # bleu4 = bleu_score(gt, pred)
-            # print("[INFO] {} BLEU score = {}".format(split, bleu4))
-            # log_file.write("[INFO] {} BLEU score = {}\n".format(split, bleu4))
 
             # ROUGE scripts
             r = Rouge155()

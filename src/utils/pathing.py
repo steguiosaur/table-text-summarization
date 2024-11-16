@@ -1,6 +1,4 @@
 from pathlib import Path
-import os
-
 
 class Pathing:
     OUTPUT_PATH = Path(__file__).parent
