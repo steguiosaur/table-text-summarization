@@ -2,6 +2,14 @@
 
 List of things to do and questions to answer.
 
+## Final Defense
+
+- [ ] fix github
+- [ ] fix colab
+- [x] chapter 3 np nc ns
+- [ ] chapter 4
+- [ ] chapter 5
+
 ## Questions
 
 1. How to use the generated model?

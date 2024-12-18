@@ -60,8 +60,8 @@ class Main(Tk):
 
         # logo image
         self.image_logo = CTkImage(
-            light_image=Image.open(Pathing.asset_path("tbldsc_black.png")),
-            dark_image=Image.open(Pathing.asset_path("tbldsc_white.png")),
+            light_image=Image.open(Pathing.asset_path("t&t-Summ-black.png")),
+            dark_image=Image.open(Pathing.asset_path("t&t-Summ-white.png")),
             size=(138, 38),
         )
         self.label_logo = CTkLabel(self, text="", image=self.image_logo)

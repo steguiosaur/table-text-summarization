@@ -293,15 +293,15 @@ if __name__ == '__main__':
 
     # add special tokens to tokenizer for linearized table structure
     tokenizer = AutoTokenizer.from_pretrained(args.model)
-    # markers = ["{", "}", "<table>", "</table>", "<type>", "</type>", "<cell>", "</cell>", "<col_header>", "</col_header>", "<row_idx>", "</row_idx>"]
-    # if args.pre_com:
-    #     markers += ["<max_rank>", "</max_rank>", "<min_rank>", "</min_rank>", "<sum_cell>", "</sum_cell>", "<avg_cell>", "</avg_cell>"]
-    # tokenizer.add_tokens(markers)
+    markers = ["{", "}", "<table>", "</table>", "<type>", "</type>", "<cell>", "</cell>", "<col_header>", "</col_header>", "<row_idx>", "</row_idx>"]
+    if args.pre_com:
+        markers += ["<max_rank>", "</max_rank>", "<min_rank>", "</min_rank>", "<sum_cell>", "</sum_cell>", "<avg_cell>", "</avg_cell>"]
+    tokenizer.add_tokens(markers)
 
     # model setup, load pretrained weights, and accomodate special tokens
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model)
     model.to(args.device)
-    # model.resize_token_embeddings(len(tokenizer))
+    model.resize_token_embeddings(len(tokenizer))
     if args.load_from is not None:
         model.load_state_dict(torch.load(args.load_from))
 
