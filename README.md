@@ -18,18 +18,25 @@ $$h = \{(i, j)\}$$
 $$H = \{h_1, h_2, \ldots, h_n\}$$
 $$P(y | X, T ; H)$$
 
-## Setup
+## Required
 
 Currently working on `python 3.12.7`
 
-Install dependencies using `pip install -r requirements.txt`
+Access experimentations, models, and datasets on the following links:
 
-```python
-torch==2.4.1
-transformers==4.45.2
-pandas==2.2.3
-nltk==3.9.1
-```
+- [Google Colab](https://colab.research.google.com/drive/1XpQio7HnYCV1dKOzhhLsQaZoM6DDuEoz?usp=sharing)
+- [Datasets](https://drive.google.com/drive/folders/1aSSZ0-xeEeNbN2v90fhNLL9ed-MQ9dBT?usp=drive_link)
+- [Models](https://drive.google.com/drive/folders/1-61sJKlLrn1MpEU2jTtza6EeFL0_2hi5?usp=drive_link)
+
+## Software Tool Setup
+
+1. Install dependencies using the command `pip install -r requirements.txt`
+
+2. Download model from the Models folder and move it to `./models/` folder
+
+3. Execute `./src/main.py` to load the software
+
+## Evaluation Setup
 
 For evaluation, do not install `pyrouge` using pip. Follow this
 [guide](https://stackoverflow.com/a/57686103/20493501) or use the
@@ -45,20 +52,6 @@ following command if you are on google colab.
 !/content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0-Exceptions/buildExeptionDB.pl /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0-Exceptions /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/smart_common_words.txt /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0.exc.db
 !python -m pyrouge.test
 ```
-
-## Training
-
-Access executor and dataset from:
-
-- [Colab](https://colab.research.google.com/drive/1bjb6SYsMTra1cTrkqKZzPwJQvtHwj3hr#updateTitle=true&folderId=1Sz9AyhaTenssgJXjd-IqGUZakbPORKRf&scrollTo=nLcm-ujRGzvW)
-- [Dataset](https://drive.google.com/drive/folders/1sCCc7XVBMeFEnkuBeBvQ0LakaxWqbSFl?usp=drive_link)
-- [Models](https://drive.google.com/drive/folders/1DNmnKNlgRKV0wcc-C7JbNCqnvPR6tDYV?usp=drive_link)
-
-## UI Setup
-
-1. Install `customtkinter` and `Pillow` in `pip`
-
-2. Execute `./src/main.py`
 
 ## Attributions
 

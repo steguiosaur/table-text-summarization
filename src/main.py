@@ -172,7 +172,7 @@ set_widget_scaling(1)
 
 app = Main()
 app.withdraw()
-app.title("tbldsc")
+app.title("T&TSumm")
 app.resizable(True, True)
 width = 1024
 height = 576
