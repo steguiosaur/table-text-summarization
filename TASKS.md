@@ -2,6 +2,52 @@
 
 List of things to do and questions to answer.
 
+## Task on UI
+
+- Add field for Target summary
+- Add R1, R2, RL calculation
+- Add NP, NC, NS calculation
+- UI on bottom for evaluation results
+
+## Maam Fabregas
+
+- Where to see the faithfulness? Based on Three metrics
+- Show the calculated factuality in terms of the metrics
+- How to see the calculated factuality? Include in the UI
+- How to see the other models evaluation?
+- How it will be checked by the expert? Show the result of other models
+
+- How the system answers the SOP1? Show it in the UI
+- How the expert will check the results?
+- Put result of the evaluations on the Appendix
+- Explain in less technical way, the calculation of ROUGE scores
+- Tool should show the scores already and how it was interpreted
+- You should have the output of every other models to compare
+- Show the calculated factuality in tool for different models
+- The current outputs of ROUGE is not the desired output of ROUGE
+  - R1 good if >50%, R2 good if >40%
+- In terms of human evaluation, how do you answer it?
+
+- Show the NP, NC, NS in UI
+- What does the result mean with respect to the score
+- How did you calculate the factuality of models based on the metrics
+- Did not show the calculated factuality
+- You have your program and dapat nakalagay sa interface nyo
+- Show metrics on the UI
+
+- In prototype, show the calculated factuality, human eval
+- What are the parameters of the human evaluation? Where is it referenced?
+- SOP2 is expert
+- We compare the output of our models to the outputs of other models
+- Expert will show ratings.
+
+- Metrics should have Related Literature (Chapter 2)
+- Answer SOP with respect to the
+- Tackle the "in terms of" when talking about the generated summary
+- Show all the models in tool
+- Check the output on ROUGE
+- Mistake on the ROUGE computation
+
 ## Final Defense
 
 - [ ] fix github
