@@ -242,9 +242,9 @@ class Main(Tk):
         selected_model = selected_model or self.option_model.get()
 
         if selected_model == "bart-lf-summ":
-            # model_path = Pathing.model_path("bart-large_ep1.pt")
-            # self.model_loader = ModelLoader("facebook/bart-large", model_path)
-            # self.model, self.tokenizer = self.model_loader.tntsumm()
+            model_path = Pathing.model_path("bart-large_ep1.pt")
+            self.model_loader = ModelLoader("facebook/bart-large", model_path)
+            self.model, self.tokenizer = self.model_loader.tntsumm()
             pass
         else:
             print(f"Model '{selected_model}' is not configured.")
