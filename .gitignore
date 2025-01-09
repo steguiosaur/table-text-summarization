@@ -3,3 +3,4 @@ __pycache__/
 speeches.md
 dataset/
 models/
+config.ini

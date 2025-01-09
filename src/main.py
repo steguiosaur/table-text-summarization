@@ -9,6 +9,7 @@ from customtkinter import (
     CTkOptionMenu,
     CTkTextbox,
     CTkToplevel,
+    StringVar,
     set_appearance_mode,
     set_default_color_theme,
     set_widget_scaling,
@@ -17,7 +18,7 @@ from utils.pathing import Pathing
 from preprocess.preprocess import Preprocess
 from models.modelloader import ModelLoader
 from rouge_score import rouge_scorer
-from utils import npncns
+from utils import npncns, settings
 
 
 class Main(Tk):
@@ -67,10 +68,11 @@ class Main(Tk):
         self.option_model = CTkOptionMenu(self, values=["bart-lf-summ",], command=self.load_model)
         self.option_model.grid(row=2, column=4, padx=(0, 20), pady=0, sticky="")
 
-        # markup language editor table selector
-        self.label_lang = CTkLabel(self, text="Markup Language", fg_color="#222222")
+        # change scaling of UI
+        self.label_lang = CTkLabel(self, text="Change Scaling", fg_color="#222222")
         self.label_lang.grid(row=3, column=4, padx=(0, 20), pady=(10, 0), sticky="")
-        self.option_lang = CTkOptionMenu(self, values=["Markdown"])
+        self.currentScaling = StringVar(value=settings.scale_read())
+        self.option_lang = CTkOptionMenu(self, values=["80%", "90%", "100%", "110%", "120%"], command=self.change_scaling_event, variable=self.currentScaling)
         self.option_lang.grid(row=4, column=4, padx=(0, 20), pady=(0, 20), sticky="")
 
         # evaluate button
@@ -98,6 +100,12 @@ class Main(Tk):
         self.button_start.grid(row=9, column=4, padx=(0, 20), pady=(40, 20), sticky="nsew")
 
         self.load_model()
+
+    def change_scaling_event(self, new_scaling: str):
+        # change scaling of application
+        new_scaling_float = int(new_scaling.replace("%", "")) / 100
+        set_widget_scaling(new_scaling_float)
+        settings.scale_save(new_scaling_float)
 
     def show_eval_window(self, generated_summary):
         # Create a frame that overlays on top of frame_input and frame_output
@@ -272,9 +280,9 @@ class Main(Tk):
         selected_model = selected_model or self.option_model.get()
 
         if selected_model == "bart-lf-summ":
-            # model_path = Pathing.model_path("bart-large_ep1.pt")
-            # self.model_loader = ModelLoader("facebook/bart-large", model_path)
-            # self.model, self.tokenizer = self.model_loader.tntsumm()
+            model_path = Pathing.model_path("bart-large_ep1.pt")
+            self.model_loader = ModelLoader("facebook/bart-large", model_path)
+            self.model, self.tokenizer = self.model_loader.tntsumm()
             pass
         else:
             print(f"Model '{selected_model}' is not configured.")
@@ -328,9 +336,11 @@ class Main(Tk):
         self.textbox_output.delete("0.0", "end")
 
 
-set_appearance_mode("Dark")
-set_default_color_theme("blue")
-set_widget_scaling(1)
+# initialize settings and themes
+settings.initialize_config()
+set_appearance_mode(settings.appearance_read())
+set_default_color_theme(settings.theme_read())
+set_widget_scaling(settings.int_scale_read())
 
 app = Main()
 app.withdraw()
