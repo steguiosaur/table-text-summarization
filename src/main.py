@@ -26,12 +26,7 @@ class Main(Tk):
 
     def __init__(self):
         super().__init__()
-
-        self.model = None
-        self.tokenizer = None
-
         self.configure(bg="#222222")
-
         self.grid_rowconfigure((8, 9), weight=1)
         self.grid_columnconfigure((0, 2), weight=1)
 
@@ -125,7 +120,6 @@ class Main(Tk):
         label_summary_eval.grid(row=0, column=2, padx=20, pady=(10, 0), sticky="nw")
         self.textbox_summary_eval = CTkTextbox(self.eval_frame, fg_color="#2e2e2e", font=("Consolas", 12), wrap="word")
         self.textbox_summary_eval.insert("1.0", generated_summary)
-        self.textbox_summary_eval.configure(state="disabled")  # Make it read-only
         self.textbox_summary_eval.grid(row=1, column=2, rowspan=2, columnspan=2, padx=(10, 20), pady=(0, 10), sticky="nsew")
 
         # Frame for evaluations
@@ -135,7 +129,7 @@ class Main(Tk):
         # Store eval_results_frame for reuse
         self.eval_results_frame = eval_results_frame
 
-        # Example ROUGE scores (replace these with actual computed values)
+        # default ROUGE scores (replaces these with actual computed values)
         rouge_scores = {
             "ROUGE-1": {"Precision": 0.00, "Recall": 0.00, "Fmeasure": 0.00},
             "ROUGE-2": {"Precision": 0.00, "Recall": 0.00, "Fmeasure": 0.00},
@@ -159,8 +153,7 @@ class Main(Tk):
 
         # Populate Numerical Measures
         numerical_measures = {"NP": 0.00, "NC": 0.00, "NS": 0.00}
-
-        numerical_column = len(rouge_scores)  # This is the fourth column (index 3)
+        numerical_column = len(rouge_scores)
         label_numerical_type = CTkLabel(
             eval_results_frame, text="Numerical Measures", font=("Consolas", 12, "bold")
         )
@@ -193,8 +186,6 @@ class Main(Tk):
 
         # Initialize ROUGE scorer
         scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
-
-        # Compute scores
         scores = scorer.score(target_summary, generated_summary)
 
         # Extract numbers from input, generated, and target summaries
@@ -224,7 +215,6 @@ class Main(Tk):
             label_measure.configure(text=f"{measure}: {value:.2f}")
 
     def show_popup(self, title, message):
-        """Show a popup message."""
         popup = CTkToplevel(self)
         popup.title(title)
         label_message = CTkLabel(popup, text=message, font=("Consolas", 12))
@@ -237,52 +227,24 @@ class Main(Tk):
         self.restore_right_side_buttons()
 
     def update_right_side_buttons(self):
-        # Replace button_evaluation with button_summarize
-        self.button_evaluation.destroy()
-        self.button_evaluation = CTkButton(
-            self,
-            text="Summarize",
-            command=self.hide_eval_frame,
-        )
-        self.button_evaluation.grid(row=5, column=4, padx=(0, 20), pady=(20, 10), sticky="")
-
-        # Replace button_start with button_evaluate
-        self.button_start.destroy()
-        self.button_evaluate = CTkButton(
-            self,
-            text="Evaluate",
-            command=self.evaluate_summary
-        )
-        self.button_evaluate.grid(row=9, column=4, padx=(0, 20), pady=(40, 20), sticky="nsew")
+        self.button_evaluation.configure(text="Summarize", command=self.hide_eval_frame)
+        self.button_clear.configure(command=lambda: self.textbox_target_text.delete("0.0", "end"))
+        self.button_reset.configure(command=lambda: self.textbox_target_text.delete("0.0", "end"))
+        self.button_start.configure(text="Evaluate", command=self.evaluate_summary)
 
     def restore_right_side_buttons(self):
-        # Restore button_evaluation
-        self.button_evaluation.destroy()
-        self.button_evaluation = CTkButton(
-            self,
-            text="Evaluate",
-            command=lambda: self.show_eval_window(self.textbox_output.get("1.0", "end-1c")
-            ),
-        )
-        self.button_evaluation.grid(row=5, column=4, padx=(0, 20), pady=(20, 10), sticky="")
-
-        # Restore button_start
-        self.button_evaluate.destroy()
-        self.button_start = CTkButton(
-            master=self,
-            text="Generate",
-            command=self.generate_summary,
-        )
-        self.button_start.grid(row=9, column=4, padx=(0, 20), pady=(40, 20), sticky="nsew")
-
+        self.button_evaluation.configure(text="Evaluate", command=lambda: self.show_eval_window(self.textbox_output.get("1.0", "end-1c")))
+        self.button_clear.configure(command=self.delete_output)
+        self.button_reset.configure(command=self.delete_input_output)
+        self.button_start.configure(text="Generate", command=self.generate_summary)
 
     def load_model(self, selected_model=None):
         selected_model = selected_model or self.option_model.get()
 
         if selected_model == "bart-lf-summ":
-            model_path = Pathing.model_path("bart-large_ep1.pt")
-            self.model_loader = ModelLoader("facebook/bart-large", model_path)
-            self.model, self.tokenizer = self.model_loader.tntsumm()
+            # model_path = Pathing.model_path("bart-large_ep1.pt")
+            # self.model_loader = ModelLoader("facebook/bart-large", model_path)
+            # self.model, self.tokenizer = self.model_loader.tntsumm()
             pass
         else:
             print(f"Model '{selected_model}' is not configured.")
@@ -312,26 +274,6 @@ class Main(Tk):
                 "1.0", "Model not loaded. Please select a model."
             )
 
-    def show_splash_screen(self):
-        self.splash_frame = CTkFrame(master=self, fg_color="#222222")
-        self.splash_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
-
-        self.splash_image = CTkImage(
-            light_image=Image.open(Pathing.asset_path("tbldsc_black.png")),
-            dark_image=Image.open(Pathing.asset_path("tbldsc_white.png")),
-            size=(276, 76),
-        )
-        self.splash_label = CTkLabel(
-            self.splash_frame, text="", image=self.splash_image
-        )
-        self.splash_label.pack(expand=True)
-
-        self.splash_frame.bind("<Button-1>", self.hide_splash_screen)
-        self.splash_frame.focus_set()
-
-    def hide_splash_screen(self, event=None):
-        self.splash_frame.destroy()
-
     def delete_output(self):
         self.textbox_output.delete("0.0", "end")
 
@@ -354,5 +296,4 @@ y = (app.winfo_screenheight() // 2) - height // 2
 app.geometry("%dx%d+%d+%d" % (width, height, x, y))
 app.minsize(1024, 576)
 app.iconphoto(True, PhotoImage(file=Pathing.asset_path("tbldsc_white_logo.png")))
-# app.show_splash_screen()
 app.mainloop()
