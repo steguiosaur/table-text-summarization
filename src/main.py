@@ -17,6 +17,7 @@ from utils.pathing import Pathing
 from preprocess.preprocess import Preprocess
 from models.modelloader import ModelLoader
 from rouge_score import rouge_scorer
+from utils import npncns
 
 
 class Main(Tk):
@@ -134,7 +135,7 @@ class Main(Tk):
         }
 
         # Add evaluations to the frame
-        eval_results_frame.columnconfigure((0, 1, 2), weight=1)
+        eval_results_frame.columnconfigure((0, 1, 2, 3), weight=1)
 
         for col, (rouge_type, metrics) in enumerate(rouge_scores.items()):
             label_rouge_type = CTkLabel(eval_results_frame, text=rouge_type, font=("Consolas", 12, "bold"))
@@ -148,11 +149,29 @@ class Main(Tk):
                 )
                 label_metric.grid(row=row, column=col, padx=10, pady=(0, 10), sticky="n")
 
+        # Populate Numerical Measures
+        numerical_measures = {"NP": 0.00, "NC": 0.00, "NS": 0.00}
+
+        numerical_column = len(rouge_scores)  # This is the fourth column (index 3)
+        label_numerical_type = CTkLabel(
+            eval_results_frame, text="Numerical Measures", font=("Consolas", 12, "bold")
+        )
+        label_numerical_type.grid(row=0, column=numerical_column, padx=10, pady=10, sticky="n")
+
+        for row, (measure, value) in enumerate(numerical_measures.items(), start=1):
+            label_measure = CTkLabel(
+                eval_results_frame,
+                text=f"{measure}: {value:.2f}",
+                font=("Consolas", 12),
+            )
+            label_measure.grid(row=row, column=numerical_column, padx=10, pady=(0, 10), sticky="n")
+
         # Change buttons on the right side
         self.update_right_side_buttons()
 
     def evaluate_summary(self):
         # Extract summaries from stored textboxes
+        input_text = self.textbox_input.get("1.0", "end-1c").strip()
         generated_summary = self.textbox_summary_eval.get("1.0", "end-1c").strip()
         target_summary = self.textbox_target_text.get("1.0", "end-1c").strip()
 
@@ -170,6 +189,16 @@ class Main(Tk):
         # Compute scores
         scores = scorer.score(target_summary, generated_summary)
 
+        # Extract numbers from input, generated, and target summaries
+        D_n = npncns.extract_numbers(input_text)
+        H_n = npncns.extract_numbers(generated_summary)
+        S_n = npncns.extract_numbers(target_summary)
+
+        # Calculate numerical measures
+        np = npncns.calculate_np(H_n, S_n)
+        nc = npncns.calculate_nc(D_n, H_n, S_n)
+        ns = npncns.calculate_ns(np, nc)
+
         # Update the eval_results_frame
         for col, rouge_type in enumerate(['rouge1', 'rouge2', 'rougeL']):
             score = scores[rouge_type]  # This is a named tuple with precision, recall, and fmeasure
@@ -177,6 +206,14 @@ class Main(Tk):
                 score_value = getattr(score, metric) * 100  # Access the attribute by name
                 label_metric = self.eval_results_frame.grid_slaves(row=row, column=col)[0]
                 label_metric.configure(text=f"{metric.capitalize()}: {score_value:.2f}")
+
+        # Update the eval_results_frame with numerical measures
+        numerical_measures = {"NP": np, "NC": nc, "NS": ns}
+        numerical_column = len(scores)  # This is the fourth column (index 3)
+
+        for row, (measure, value) in enumerate(numerical_measures.items(), start=1):
+            label_measure = self.eval_results_frame.grid_slaves(row=row, column=numerical_column)[0]
+            label_measure.configure(text=f"{measure}: {value:.2f}")
 
     def show_popup(self, title, message):
         """Show a popup message."""

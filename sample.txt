@@ -6,4 +6,4 @@ this paper presents a novel approach for named entity recognition (ner) and ment
 
 ======= Generated Summary =======
 
-table 5 presents the official entity discovery performance of our methods on the kbp2016 trilingual edl track. as shown in the table, the run1 (our official ed) method achieves a f1 score of 0.836, surpassing all other methods by a significant margin, achieving the highest f1 of any method. this highlights the effectiveness of the approach in detecting entity discovery.
+table 5 presents the official entity iscovery performance of our methods on the kbp2016 trilingual edl track. as shown in the table, the run1 (our official ed) method achieves a f1 score of 0.836, surpassing all other methods by a significant margin, achieving the highest f1 of any method. this highlights the effectiveness of the approach in detecting entity discovery.
