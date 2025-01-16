@@ -33,10 +33,6 @@ Access experimentations, models, and datasets on the following links:
 
 1. Install dependencies using the command `pip install -r requirements.txt`
 
-2. Download model from the Models folder and move it to `./models/` folder
+2. Download the model from [GDrive](https://drive.google.com/file/d/1-2GFZ9FmJA_fb8geYulUNxWYzZ7rLx-H/view?usp=sharing) and move it to `./models/` folder
 
 3. Execute `./src/main.py` to load the software
-
-## Attributions
-
-> Code mostly came from [microsoft/PLOG](https://github.com/microsoft/PLOG) and [czyssrs/Logic2Text](https://github.com/czyssrs/Logic2Text)
