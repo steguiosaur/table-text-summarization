@@ -245,7 +245,6 @@ class Main(Tk):
             model_path = Pathing.model_path("bart-large_ep1.pt")
             self.model_loader = ModelLoader("facebook/bart-large", model_path)
             self.model, self.tokenizer = self.model_loader.tntsumm()
-            pass
         else:
             print(f"Model '{selected_model}' is not configured.")
 

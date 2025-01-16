@@ -1633,7 +1633,8 @@ from collections import defaultdict
 from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
-from pyrouge import Rouge155
+# from pyrouge import Rouge155
+from rouge_score import rouge_scorer, scoring
 import pandas as pd
 
 
@@ -1733,27 +1734,52 @@ def validation_task(val_file, model, tokenizer, split, args):
             gt = os.path.join(args.log_path, args.affix, f'references_{split}.txt')
             pred = os.path.join(args.log_path, args.affix, f'predictions_{split}.txt')
 
-            # ROUGE scripts
-            r = Rouge155()
-            r.system_dir = os.path.join(args.log_path, args.affix, f'predictions_{split}/')
-            r.model_dir = os.path.join(args.log_path, args.affix, f'references_{split}/')
-            # define the patterns
-            r.system_filename_pattern = '(\d+)_prediction.txt'
-            r.model_filename_pattern = '#ID#_reference.txt'
-            logging.getLogger('global').setLevel(logging.WARNING)  # silence pyrouge logging
-            results_dict = r.convert_and_evaluate()
-            rouge_result = "\n".join(
-                [results_dict.split("\n")[3], results_dict.split("\n")[7], results_dict.split("\n")[15],
-                 results_dict.split("\n")[19]])
-            print("[INFO] Rouge scores: \n", rouge_result)
-            # log_file.write(rouge_result + '\n')
-            results_dict = results_dict.split("\n")
-            rouge_score_list = []
+            # Initialize ROUGE scorer and aggregator
+            scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+            aggregator = scoring.BootstrapAggregator()
 
-            for i in [3, 7, 15, 19]:
-                results = results_dict[i]
-                rouge_score = float(results.split()[3])
-                rouge_score_list.append(rouge_score * 100)
+            # Calculate ROUGE scores for each prediction-reference pair
+            with open(gt, 'r') as gt_file, open(pred, 'r') as pred_file:
+                ref_lines = gt_file.readlines()
+                pred_lines = pred_file.readlines()
+
+                for idx, (reference, prediction) in enumerate(zip(ref_lines, pred_lines)):
+                    scores = scorer.score(reference.strip(), prediction.strip())
+                    if args.task == 'summ':
+                        print(f"[INFO] Iteration {idx}:")
+                        for key, value in scores.items():
+                            print(f"  {key.upper()} - Precision: {value.precision:.4f}, Recall: {value.recall:.4f}, F1: {value.fmeasure:.4f}")
+                    aggregator.add_scores(scores)
+
+            # Aggregate overall ROUGE scores
+            overall_scores = aggregator.aggregate()
+            print("\n[INFO] Overall ROUGE scores:")
+            rouge_score_list = []
+            for key, value in overall_scores.items():
+                print(f"  {key.upper()}: Precision: {value.mid.precision:.4f}, Recall: {value.mid.recall:.4f}, F1: {value.mid.fmeasure:.4f}")
+                rouge_score_list.append(value.mid.fmeasure * 100)  # Only storing F1 scores as before
+
+            # # ROUGE scripts
+            # r = Rouge155()
+            # r.system_dir = os.path.join(args.log_path, args.affix, f'predictions_{split}/')
+            # r.model_dir = os.path.join(args.log_path, args.affix, f'references_{split}/')
+            # # define the patterns
+            # r.system_filename_pattern = '(\d+)_prediction.txt'
+            # r.model_filename_pattern = '#ID#_reference.txt'
+            # logging.getLogger('global').setLevel(logging.WARNING)  # silence pyrouge logging
+            # results_dict = r.convert_and_evaluate()
+            # rouge_result = "\n".join(
+            #     [results_dict.split("\n")[3], results_dict.split("\n")[7], results_dict.split("\n")[15],
+            #      results_dict.split("\n")[19]])
+            # print("[INFO] Rouge scores: \n", rouge_result)
+            # # log_file.write(rouge_result + '\n')
+            # results_dict = results_dict.split("\n")
+            # rouge_score_list = []
+            #
+            # for i in [3, 7, 15, 19]:
+            #     results = results_dict[i]
+            #     rouge_score = float(results.split()[3])
+            #     rouge_score_list.append(rouge_score * 100)
 
         # If the task is table-to-logic generation
         elif args.task == 'logic':
@@ -1796,7 +1822,7 @@ def validation_task(val_file, model, tokenizer, split, args):
 
         val_metric_dict = {}
         if args.task == 'text' or args.task == 'summ':
-            for type, score in zip(['1', '2', '4', 'L'], rouge_score_list):
+            for type, score in zip(['1', '2', 'L'], rouge_score_list):
                 val_metric_dict[f'rouge{type}'] = score
             # val_metric_dict['bleu4'] = bleu4
         elif args.task == 'logic':

@@ -37,23 +37,6 @@ Access experimentations, models, and datasets on the following links:
 
 3. Execute `./src/main.py` to load the software
 
-## Evaluation Setup
-
-For evaluation, do not install `pyrouge` using pip. Follow this
-[guide](https://stackoverflow.com/a/57686103/20493501) or use the
-following command if you are on google colab.
-
-```sh
-!git clone https://github.com/bheinzerling/pyrouge /content/pyrouge/
-!pip install -e /content/pyrouge/
-!git clone https://github.com/andersjo/pyrouge.git /content/pyrouge/rouge
-!pyrouge_set_rouge_path /content/pyrouge/rouge/tools/ROUGE-1.5.5/
-!apt-get install -y libxml-parser-perl
-!rm /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0.exc.db
-!/content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0-Exceptions/buildExeptionDB.pl /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0-Exceptions /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/smart_common_words.txt /content/pyrouge/rouge/tools/ROUGE-1.5.5/data/WordNet-2.0.exc.db
-!python -m pyrouge.test
-```
-
 ## Attributions
 
 > Code mostly came from [microsoft/PLOG](https://github.com/microsoft/PLOG) and [czyssrs/Logic2Text](https://github.com/czyssrs/Logic2Text)

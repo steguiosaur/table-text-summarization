@@ -120,11 +120,10 @@ class ScigenDataset(Dataset):
 
 import os, io, re, subprocess
 import json
-import logging
 from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
-from pyrouge import Rouge155
+from rouge_score import rouge_scorer, scoring
 
 
 def bleu_score(labels_file, predictions_path):
@@ -197,38 +196,43 @@ def validation_task(val_file, model, tokenizer, split, args):
         gt = os.path.join(args.log_path, args.affix, f'references_{split}.txt')
         pred = os.path.join(args.log_path, args.affix, f'predictions_{split}.txt')
 
-        # ROUGE scripts
-        r = Rouge155()
-        r.system_dir = os.path.join(args.log_path, args.affix, f'predictions_{split}/')
-        r.model_dir = os.path.join(args.log_path, args.affix, f'references_{split}/')
-        # define the patterns
-        r.system_filename_pattern = '(\d+)_prediction.txt'
-        r.model_filename_pattern = '#ID#_reference.txt'
-        logging.getLogger('global').setLevel(logging.WARNING)  # silence pyrouge logging
-        results_dict = r.convert_and_evaluate()
-        rouge_result = "\n".join(
-            [results_dict.split("\n")[3], results_dict.split("\n")[7], results_dict.split("\n")[15],
-             results_dict.split("\n")[19]])
-        print("[INFO] Rouge scores: \n", rouge_result)
-        # log_file.write(rouge_result + '\n')
-        results_dict = results_dict.split("\n")
-        rouge_score_list = []
+        # ROUGE evaluation using `rouge_score`
+        scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+        aggregator = scoring.BootstrapAggregator()
 
-        for i in [3, 7, 15, 19]:
-            results = results_dict[i]
-            rouge_score = float(results.split()[3])
-            rouge_score_list.append(rouge_score * 100)
+        with open(gt, 'r') as gt_file, open(pred, 'r') as pred_file:
+            references = gt_file.readlines()
+            predictions = pred_file.readlines()
 
-        val_metric_dict = {}
-        if args.task == 'text' or args.task == 'summ':
-            for type, score in zip(['1', '2', '4', 'L'], rouge_score_list):
-                val_metric_dict[f'rouge{type}'] = score
-            # val_metric_dict['bleu4'] = bleu4
-        else:
-            raise NotImplementedError
-        model.train()
-        return val_metric_dict
+            for idx, (ref, pred) in enumerate(zip(references, predictions)):
+                ref = ref.strip()
+                pred = pred.strip()
 
+                # Compute ROUGE scores for each sample
+                scores = scorer.score(ref, pred)
+                aggregator.add_scores(scores)
+
+                # Log per-sample ROUGE scores
+                print(f"Iteration {idx + 1} ROUGE Scores:")
+                for rouge_type, score in scores.items():
+                    print(f"  {rouge_type.upper()}: Precision: {score.precision:.4f}, Recall: {score.recall:.4f}, F1: {score.fmeasure:.4f}")
+                print()
+
+        # Compute and log overall ROUGE scores
+        result = aggregator.aggregate()
+        overall_scores = {}
+        print("\n[INFO] Overall ROUGE Scores:")
+        for rouge_type, value in result.items():
+            overall_scores[rouge_type] = {
+                "Precision": value.mid.precision * 100,
+                "Recall": value.mid.recall * 100,
+                "F1": value.mid.fmeasure * 100
+            }
+            print(f"  {rouge_type.upper()}: Precision={overall_scores[rouge_type]['Precision']:.2f}, "
+                  f"Recall={overall_scores[rouge_type]['Recall']:.2f}, "
+                  f"F1={overall_scores[rouge_type]['F1']:.2f}")
+
+        return overall_scores
 
 import math
 import random

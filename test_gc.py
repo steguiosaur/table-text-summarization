@@ -1,6 +1,5 @@
-import logging
 import os
-from pyrouge import Rouge155
+from rouge_score import rouge_scorer, scoring
 
 def concatenate_predictions(tabletotext_path, summarizedt_path, gcsummarize_path, split):
     # Define the input and output directories
@@ -63,31 +62,40 @@ def validation_task(split="test"):
                 pred_file.write(pf.read().strip() + "\n")
 
     # ROUGE evaluation using `pyrouge`
-    r = Rouge155()
-    r.system_dir = pred_split
-    r.model_dir = ref_split
-    r.system_filename_pattern = '(\d+)_prediction.txt'
-    r.model_filename_pattern = '#ID#_reference.txt'
-    
-    logging.getLogger('global').setLevel(logging.WARNING)  # Suppress verbose logging
-    results_dict = r.convert_and_evaluate()
-    
-    # Extracting and formatting ROUGE scores
-    results_lines = results_dict.split("\n")
-    rouge_score_list = []
-    for i in [3, 7, 15, 19]:  # Select specific lines for ROUGE-1, ROUGE-2, ROUGE-4, ROUGE-L
-        results = results_lines[i]
-        rouge_score = float(results.split()[3])  # Extract score as a float
-        rouge_score_list.append(rouge_score * 100)
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+    aggregator = scoring.BootstrapAggregator()
 
-    val_metric_dict = {}
-    for type, score in zip(['1', '2', '4', 'L'], rouge_score_list):
-        val_metric_dict[f'rouge{type}'] = score
-    
-    # Print ROUGE scores for confirmation
-    print("[INFO] Rouge scores: ", val_metric_dict)
+    with open(gt_path, 'r') as gt_file, open(pred_path, 'r') as pred_file:
+        references = gt_file.readlines()
+        predictions = pred_file.readlines()
 
-    return val_metric_dict
+        for ref, pred in zip(references, predictions):
+            ref = ref.strip()
+            pred = pred.strip()
 
+            # Compute ROUGE scores for each sample
+            scores = scorer.score(ref, pred)
+            aggregator.add_scores(scores)
+
+            # Log per-sample ROUGE scores
+            print("Iteration ROUGE Scores:")
+            for rouge_type, score in scores.items():
+                print(f"{rouge_type}: Precision={score.precision:.4f}, Recall={score.recall:.4f}, F1={score.fmeasure:.4f}")
+
+    # Compute and log overall ROUGE scores
+    result = aggregator.aggregate()
+    overall_scores = {}
+    for rouge_type, value in result.items():
+        overall_scores[rouge_type] = {
+            "Precision": value.mid.precision * 100,
+            "Recall": value.mid.recall * 100,
+            "F1": value.mid.fmeasure * 100
+        }
+
+    print("\n[INFO] Overall ROUGE Scores:")
+    for rouge_type, scores in overall_scores.items():
+        print(f"{rouge_type}: Precision: {scores['Precision']:.2f}, Recall: {scores['Recall']:.2f}, F1: {scores['F1']:.2f}")
+
+    return overall_scores
 # Example usage
 validation_task("test")
